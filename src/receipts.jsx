@@ -1,8 +1,7 @@
 import { QRCodeSVG } from "qrcode.react";
-import { scheme, CURRENCY, money, upiUri } from "./billing";
+import { scheme, money, upiUri, amountInWords } from "./billing";
 import { Button, Modal } from "./ui";
 
-// A thin line of the receipt (label left, value right)
 function L({ l, r, bold }) {
   return (
     <div className={`flex justify-between gap-2 ${bold ? "text-[13px] font-bold" : ""}`}>
@@ -19,18 +18,15 @@ function Dashed() {
 function Head({ title }) {
   return (
     <div className="text-center">
-      <div className="text-[13px] font-bold leading-tight">{scheme.name}</div>
-      <div className="text-[10px]">{scheme.malayalamName}</div>
-      <div className="text-[10px]">{scheme.subtitle}</div>
-      <div className="text-[10px]">Ph: {scheme.phone}</div>
-      <div className="mt-1 inline-block rounded bg-black px-2 text-[11px] font-bold tracking-wider text-white">
-        {title}
-      </div>
+      <div className="text-[11px] font-bold leading-tight">{scheme.malayalamName}</div>
+      <div className="text-[12px] font-bold leading-tight">{scheme.name}</div>
+      <div className="text-[9px]">{scheme.subtitle}</div>
+      <div className="text-[9px]">Ph: {scheme.phone}</div>
+      <div className="mt-1 inline-block rounded bg-black px-2 text-[11px] font-bold tracking-wider text-white">{title}</div>
     </div>
   );
 }
 
-// The 58mm paper. Same look on screen and when printed.
 function Paper({ children }) {
   return (
     <div
@@ -44,15 +40,15 @@ function Paper({ children }) {
 }
 
 export function BillReceipt({ data }) {
-  const { consumer, charge, billNo, arrears, totalDue, date } = data;
+  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName } = data;
   const qr = upiUri({ amount: totalDue, note: `${consumer.consumerNo} ${billNo}` });
   return (
     <Paper>
-      <Head title="WATER BILL" />
+      <Head title="WATER BILL / NOTICE" />
       <Dashed />
       <L l="Bill No" r={billNo} />
       <L l="Date" r={date} />
-      <L l="Consumer" r={consumer.consumerNo} />
+      <L l="Con. No" r={consumer.consumerNo} />
       <L l="Name" r={consumer.name} />
       <L l="Meter" r={consumer.meterNo} />
       <Dashed />
@@ -61,17 +57,27 @@ export function BillReceipt({ data }) {
           <L l="Prev reading" r={charge.prevReading} />
           <L l="Curr reading" r={charge.currentReading} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
-          <L l="Units used" r={charge.units} />
-          <L l={`Water @${CURRENCY}${charge.ratePerUnit}`} r={money(charge.units * charge.ratePerUnit)} />
-          <L l="Fixed charge" r={money(charge.fixedCharge)} />
+          <L l="Consumption" r={`${charge.consumption} L`} />
+          {charge.excessLitres > 0 && <L l="Excess" r={`${charge.excessLitres} L`} />}
         </>
       ) : (
-        <L l="Flat charge" r={money(charge.currentCharge)} />
+        <L l="Connection" r="Flat-rate (no meter)" />
       )}
-      <L l="This month" r={money(charge.currentCharge)} />
-      <L l="Old arrears" r={money(arrears)} />
       <Dashed />
-      <L l="TOTAL DUE" r={money(totalDue)} bold />
+      <L l="Water charge" r={money(charge.waterCharge)} />
+      <L l="Meter fund" r={money(charge.meterFund)} />
+      <L l="Maintenance fund" r={money(charge.maintenanceFund)} />
+      <L l="Fine / others" r={money(charge.fine)} />
+      <L l="This bill" r={money(charge.currentCharge)} bold />
+      <L l="Arrears" r={money(arrears)} />
+      <Dashed />
+      <L l="TOTAL PAYABLE" r={money(totalDue)} bold />
+      <div className="mt-1 text-[9px] italic">({amountInWords(totalDue)})</div>
+      <Dashed />
+      <div className="text-[9px]">
+        <div>Pay by {dueNoFine} — no fine</div>
+        <div>Pay by {dueWithFine} — with fine</div>
+      </div>
       <Dashed />
       <div className="flex flex-col items-center gap-1 py-1">
         <QRCodeSVG value={qr} size={104} level="M" />
@@ -79,7 +85,8 @@ export function BillReceipt({ data }) {
         <div className="text-center text-[9px]">{scheme.upi.vpa}</div>
       </div>
       <Dashed />
-      <div className="text-center text-[10px]">Please pay before due date. Thank you!</div>
+      {readerName && <div className="text-[9px]">Reader: {readerName}</div>}
+      <div className="text-center text-[10px]">Thank you!</div>
     </Paper>
   );
 }
@@ -90,23 +97,20 @@ export function PaymentReceipt({ data }) {
   const credit = balanceAfter < 0 ? -balanceAfter : 0;
   return (
     <Paper>
-      <Head title="PAYMENT RECEIPT" />
+      <Head title="RECEIPT" />
       <Dashed />
       <L l="Receipt No" r={receiptNo} />
       <L l="Date" r={date} />
-      <L l="Consumer" r={consumer.consumerNo} />
-      <L l="Name" r={consumer.name} />
+      <L l="Con. No" r={consumer.consumerNo} />
+      <L l="From" r={payerName || consumer.name} />
       <Dashed />
-      <L l="Amount paid" r={money(amount)} bold />
+      <L l="Received Rs" r={money(amount)} bold />
       <L l="Mode" r={mode} />
-      {payerName && payerName !== consumer.name && <L l="Paid by" r={payerName} />}
+      {payerName && payerName !== consumer.name && <L l="(for)" r={consumer.name} />}
       {reference && <L l="Ref" r={reference} />}
       <Dashed />
-      {credit > 0 ? (
-        <L l="Advance credit" r={money(credit)} bold />
-      ) : (
-        <L l="Balance remaining" r={money(remaining)} bold />
-      )}
+      {credit > 0 ? <L l="Advance credit" r={money(credit)} bold /> : <L l="Balance due" r={money(remaining)} bold />}
+      <div className="mt-1 text-[9px] italic">({amountInWords(amount)} received)</div>
       <Dashed />
       <div className="text-center text-[11px] font-bold tracking-wider">✓ PAID</div>
       {remaining > 0 && (
@@ -116,12 +120,11 @@ export function PaymentReceipt({ data }) {
         </div>
       )}
       <Dashed />
-      <div className="text-center text-[10px]">Thank you!</div>
+      <div className="text-center text-[10px]">Cashier ______</div>
     </Paper>
   );
 }
 
-// One modal for both kinds of receipt.
 export function ReceiptModal({ receipt, onClose }) {
   const isBill = receipt.kind === "bill";
   return (
@@ -134,12 +137,8 @@ export function ReceiptModal({ receipt, onClose }) {
         {isBill ? <BillReceipt data={receipt.data} /> : <PaymentReceipt data={receipt.data} />}
       </div>
       <div className="mt-4 flex gap-2">
-        <Button variant="ghost" className="flex-1" onClick={onClose}>
-          Close
-        </Button>
-        <Button className="flex-1" onClick={() => window.print()}>
-          🖨 Print
-        </Button>
+        <Button variant="ghost" className="flex-1" onClick={onClose}>Close</Button>
+        <Button className="flex-1" onClick={() => window.print()}>🖨 Print</Button>
       </div>
       <p className="mt-2 text-center text-xs text-slate-400">
         On the reader's phone, Print sends this to the Bluetooth printer via RawBT.

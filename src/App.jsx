@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -11,6 +11,12 @@ import { Toaster, toast } from "./toast";
 
 function today() {
   return new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function addDays(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export default function App() {
@@ -45,7 +51,7 @@ export default function App() {
         if (!alive) return;
         setConsumers(d.consumers);
         setTxns(d.txns);
-        if (d.tariff) setTariff(d.tariff);
+        setTariff({ ...initialTariff, ...(d.tariff || {}) });
         setSeq({
           bill: d.txns.filter((t) => t.type === "bill").length,
           receipt: d.txns.filter((t) => t.type === "payment").length,
@@ -70,7 +76,15 @@ export default function App() {
         setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: charge.currentReading } : c)));
       }
       setSeq((s) => ({ ...s, bill: s.bill + 1 }));
-      setReceipt({ kind: "bill", data: { consumer, charge, billNo, arrears, totalDue, date: today() } });
+      setReceipt({
+        kind: "bill",
+        data: {
+          consumer, charge, billNo, arrears, totalDue, date: today(),
+          dueNoFine: addDays(tariff.dueDaysNoFine ?? 15),
+          dueWithFine: addDays(tariff.dueDaysWithFine ?? 30),
+          readerName: session?.user?.email || "",
+        },
+      });
       toast.success(`Bill ${billNo} saved`);
     } catch (e) {
       toast.error("Could not save the bill: " + e.message);
@@ -398,7 +412,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate }) {
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <Detail label="Category" value={tariff.categories[consumer.category]?.label || consumer.category} />
+          <Detail label="Category" value={categoryLabel(consumer.category)} />
           <Detail label="Connection" value={consumer.metered ? "Metered" : "Flat-rate"} />
           <Detail label="Status" value={consumer.status} />
           <Detail
@@ -476,11 +490,16 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate }) {
       {/* Bill preview */}
       <Card className="p-4">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Bill preview</h3>
-        <Line l="Units used" v={consumer.metered ? charge.units : "—"} />
-        <Line l="This month's charge" v={money(charge.currentCharge)} />
+        <Line l="Consumption" v={consumer.metered ? `${charge.consumption} L` : "—"} />
+        {charge.excessLitres > 0 && <Line l="Excess litres" v={`${charge.excessLitres} L`} />}
+        <Line l="Water charge" v={money(charge.waterCharge)} />
+        <Line l="Meter fund" v={money(charge.meterFund)} />
+        <Line l="Maintenance fund" v={money(charge.maintenanceFund)} />
+        {charge.fine > 0 && <Line l="Fine / others" v={money(charge.fine)} />}
+        <Line l="This bill" v={money(charge.currentCharge)} />
         <Line l="Previous arrears" v={money(arrears)} />
         <div className="my-2 border-t border-dashed border-slate-200" />
-        <Line l="TOTAL DUE" v={money(totalDue)} bold />
+        <Line l="TOTAL PAYABLE" v={money(totalDue)} bold />
       </Card>
 
       <Button className="w-full py-3 text-base" disabled={!canSave} onClick={() => onGenerate(charge)}>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { scheme, CURRENCY, money, balanceOf } from "./billing";
+import { scheme, money, balanceOf, categoryLabel } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
 // ===========================================================================
@@ -174,7 +174,7 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay }) {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold">{consumer.name}</h2>
               {!consumer.metered && <Pill variant="flat">flat-rate</Pill>}
-              <Pill variant="info">{tariff.categories[consumer.category]?.label}</Pill>
+              <Pill variant="info">{categoryLabel(consumer.category)}</Pill>
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
               <Info label="Consumer No" value={consumer.consumerNo} strong />
@@ -243,7 +243,7 @@ function LedgerRow({ row, consumerName }) {
         </div>
         <div className="ml-8 truncate text-xs text-slate-400">
           {t.date}
-          {isBill && t.meta.charge?.metered ? ` · reading ${t.meta.charge.prevReading} → ${t.meta.charge.currentReading} (${t.meta.charge.units} units)` : ""}
+          {isBill && t.meta.charge?.metered ? ` · reading ${t.meta.charge.prevReading} → ${t.meta.charge.currentReading} (${t.meta.charge.consumption} L)` : ""}
           {isBill && t.meta.charge && !t.meta.charge.metered ? " · flat charge" : ""}
           {!isBill && t.meta.mode ? ` · ${t.meta.mode}` : ""}
           {!isBill && t.meta.payerName && t.meta.payerName !== consumerName ? ` · by ${t.meta.payerName}` : ""}
@@ -388,32 +388,62 @@ function Settings({ tariff, setTariff, onAddConsumer }) {
 
       <div>
         <h2 className="text-lg font-bold">Tariff Settings</h2>
-        <p className="text-sm text-slate-500">Change the rates here — no coding needed. Enter Gireesh's real rates when they arrive.</p>
+        <p className="text-sm text-slate-500">Example values — edit any time (e.g. after the 12th). No coding needed.</p>
       </div>
 
-      {["domestic", "commercial"].map((cat) => (
-        <Card key={cat} className="p-4">
-          <h3 className="mb-3 font-semibold capitalize">{tariff.categories[cat].label}</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={`Rate per ${CURRENCY}/unit`}>
-              <input type="number" className={inputClass} value={form.categories[cat].ratePerUnit}
-                onChange={(e) => update((n, v) => (n.categories[cat].ratePerUnit = v), e.target.value)} />
-            </Field>
-            <Field label="Fixed charge">
-              <input type="number" className={inputClass} value={form.categories[cat].fixedCharge}
-                onChange={(e) => update((n, v) => (n.categories[cat].fixedCharge = v), e.target.value)} />
-            </Field>
-            <Field label="Flat-rate (no meter) / month">
-              <input type="number" className={inputClass} value={form.flatRate[cat]}
-                onChange={(e) => update((n, v) => (n.flatRate[cat] = v), e.target.value)} />
-            </Field>
-          </div>
-        </Card>
-      ))}
+      <Card className="p-4">
+        <h3 className="mb-3 font-semibold">Water charge</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Monthly minimum (₹)" hint="covers the included litres">
+            <input type="number" className={inputClass} value={form.minCharge}
+              onChange={(e) => update((n, v) => (n.minCharge = v), e.target.value)} />
+          </Field>
+          <Field label="Litres included">
+            <input type="number" className={inputClass} value={form.freeLitres}
+              onChange={(e) => update((n, v) => (n.freeLitres = v), e.target.value)} />
+          </Field>
+          <Field label="Excess (₹ per litre)" hint="above the included litres">
+            <input type="number" step="0.01" className={inputClass} value={form.excessPerLitre}
+              onChange={(e) => update((n, v) => (n.excessPerLitre = v), e.target.value)} />
+          </Field>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="mb-3 font-semibold">Funds & fine</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Meter fund (₹)">
+            <input type="number" className={inputClass} value={form.meterFund}
+              onChange={(e) => update((n, v) => (n.meterFund = v), e.target.value)} />
+          </Field>
+          <Field label="Maintenance fund (₹)">
+            <input type="number" className={inputClass} value={form.maintenanceFund}
+              onChange={(e) => update((n, v) => (n.maintenanceFund = v), e.target.value)} />
+          </Field>
+          <Field label="Fine / others (₹)">
+            <input type="number" className={inputClass} value={form.fine}
+              onChange={(e) => update((n, v) => (n.fine = v), e.target.value)} />
+          </Field>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="mb-3 font-semibold">Due dates</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Days to pay (no fine)">
+            <input type="number" className={inputClass} value={form.dueDaysNoFine}
+              onChange={(e) => update((n, v) => (n.dueDaysNoFine = v), e.target.value)} />
+          </Field>
+          <Field label="Days to pay (with fine)">
+            <input type="number" className={inputClass} value={form.dueDaysWithFine}
+              onChange={(e) => update((n, v) => (n.dueDaysWithFine = v), e.target.value)} />
+          </Field>
+        </div>
+      </Card>
 
       <div className="flex items-center gap-3">
-        <Button onClick={() => { setTariff(form); setSaved(true); }}>Save rates</Button>
-        {saved && <span className="text-sm font-medium text-sky-600">✓ Saved — new bills use these rates.</span>}
+        <Button onClick={() => { setTariff(form); setSaved(true); }}>Save values</Button>
+        {saved && <span className="text-sm font-medium text-sky-600">✓ Saved — new bills use these values.</span>}
       </div>
     </div>
   );
