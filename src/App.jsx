@@ -139,6 +139,9 @@ export default function App() {
     }
   }
 
+  // Role: a mobile login (…@kolayil.local) is the Admin; a real email is a Reader.
+  const userRole = session?.user?.email?.toLowerCase().endsWith("@kolayil.local") ? "admin" : "reader";
+
   // ---- gates ----
   let content;
   if (!isConfigured) content = <FullScreen title="Not connected" msg="Supabase keys are missing (.env.local)." />;
@@ -149,13 +152,13 @@ export default function App() {
   else
     content = (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-800">
-        <TopBar role={role} setRole={setRole} email={session.user?.email} />
+        <TopBar role={role} setRole={setRole} email={session.user?.email} userRole={userRole} />
 
         <main key={role} className="animate-fade-in mx-auto max-w-5xl px-4 pb-24 pt-5">
-          {role === "reader" ? (
-            <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} />
-          ) : (
+          {userRole === "admin" && role === "admin" ? (
             <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} />
+          ) : (
+            <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} />
           )}
         </main>
 
@@ -198,7 +201,7 @@ function FullScreen({ title, msg, spinner }) {
 }
 
 function Login() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -207,7 +210,10 @@ function Login() {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    const id = identifier.trim();
+    // Mobile number -> internal email; a real email is used as-is.
+    const email = id.includes("@") ? id : `${id.replace(/\D/g, "")}@kolayil.local`;
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
     if (error) { setErr(error.message); toast.error("Sign in failed"); }
     setBusy(false);
   }
@@ -230,8 +236,8 @@ function Login() {
           <p className="text-xs text-slate-500">Water Billing System · Staff Login</p>
         </div>
         <div className="space-y-3">
-          <Field label="Email">
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="office@kws.in" autoFocus />
+          <Field label="Mobile number or email">
+            <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className={inputClass} placeholder="mobile number or email" autoFocus />
           </Field>
           <Field label="Password">
             <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={inputClass} placeholder="••••••••" />
@@ -246,7 +252,7 @@ function Login() {
   );
 }
 
-function TopBar({ role, setRole, email }) {
+function TopBar({ role, setRole, email, userRole }) {
   return (
     <header className="animate-gradient relative overflow-hidden bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 text-white shadow-lg">
       <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
@@ -260,17 +266,21 @@ function TopBar({ role, setRole, email }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-xl bg-black/15 p-1 text-xs font-semibold ring-1 ring-white/15">
-            {["reader", "admin"].map((r) => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                className={`rounded-lg px-3 py-1.5 transition ${role === r ? "bg-white text-blue-800 shadow" : "text-blue-50 hover:bg-white/10"}`}
-              >
-                {r === "reader" ? "Meter Reader" : "Admin"}
-              </button>
-            ))}
-          </div>
+          {userRole === "admin" ? (
+            <div className="flex rounded-xl bg-black/15 p-1 text-xs font-semibold ring-1 ring-white/15">
+              {["reader", "admin"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRole(r)}
+                  className={`rounded-lg px-3 py-1.5 transition ${role === r ? "bg-white text-blue-800 shadow" : "text-blue-50 hover:bg-white/10"}`}
+                >
+                  {r === "reader" ? "Meter Reader" : "Admin"}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/15">Meter Reader</span>
+          )}
           <button
             onClick={() => supabase.auth.signOut()}
             title={email ? `Sign out (${email})` : "Sign out"}
@@ -292,7 +302,7 @@ function TopBar({ role, setRole, email }) {
 // ---------------------------------------------------------------------------
 // METER READER FLOW
 // ---------------------------------------------------------------------------
-function ReaderFlow({ consumers, txns, tariff, onGenerate }) {
+function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("pending"); // pending | all | done
@@ -305,6 +315,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate }) {
         txns={txns}
         arrears={balanceOf(selected, txns)}
         onBack={() => setSelected(null)}
+        onPay={onPay}
         onGenerate={(charge) => { onGenerate(selected, charge); setSelected(null); }}
       />
     );
@@ -394,7 +405,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate }) {
   );
 }
 
-function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate }) {
+function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay }) {
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
   const charge = calculateCharge(consumer, reading, tariff, reset);
@@ -436,6 +447,11 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate }) {
             <span className="text-slate-600">Outstanding dues</span>
             <span className="font-bold text-rose-600">{money(arrears)}</span>
           </div>
+        )}
+        {onPay && (
+          <Button variant="gold" className="mt-3 w-full" onClick={() => onPay(consumer)}>
+            Record Payment
+          </Button>
         )}
       </Card>
 
