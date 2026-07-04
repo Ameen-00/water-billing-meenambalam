@@ -279,6 +279,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate }) {
       <ReadingEntry
         consumer={selected}
         tariff={tariff}
+        txns={txns}
         arrears={balanceOf(selected, txns)}
         onBack={() => setSelected(null)}
         onGenerate={(charge) => { onGenerate(selected, charge); setSelected(null); }}
@@ -370,7 +371,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate }) {
   );
 }
 
-function ReadingEntry({ consumer, tariff, arrears, onBack, onGenerate }) {
+function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate }) {
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
   const charge = calculateCharge(consumer, reading, tariff, reset);
@@ -379,21 +380,63 @@ function ReadingEntry({ consumer, tariff, arrears, onBack, onGenerate }) {
   const readingLow = consumer.metered && !reset && reading !== "" && Number(reading) < consumer.prevReading;
   const canSave = !consumer.metered || (reading !== "" && !readingLow);
 
+  const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
+
   return (
     <div className="mx-auto max-w-md space-y-3">
       <button onClick={onBack} className="text-sm font-medium text-blue-700 hover:underline">← Back to route</button>
 
+      {/* Customer profile */}
       <Card className="p-4">
         <div className="flex items-center gap-3">
           <Avatar name={consumer.name} size="h-12 w-12" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate font-bold">{consumer.name}</div>
-            <div className="truncate text-xs text-slate-500">{consumer.consumerNo} · {consumer.meterNo} · {consumer.address}</div>
+            <div className="truncate text-xs text-slate-500">{consumer.consumerNo} · {consumer.meterNo}</div>
           </div>
+          <BalancePill amount={arrears} />
         </div>
 
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <Detail label="Category" value={tariff.categories[consumer.category]?.label || consumer.category} />
+          <Detail label="Connection" value={consumer.metered ? "Metered" : "Flat-rate"} />
+          <Detail label="Status" value={consumer.status} />
+          <Detail
+            label="Phone"
+            value={consumer.phone ? <a href={`tel:${consumer.phone}`} className="font-medium text-blue-700 underline">{consumer.phone}</a> : "—"}
+          />
+          <div className="col-span-2"><Detail label="Address" value={consumer.address || "—"} /></div>
+        </div>
+
+        {arrears > 0 && (
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm ring-1 ring-rose-200">
+            <span className="text-slate-600">Outstanding dues</span>
+            <span className="font-bold text-rose-600">{money(arrears)}</span>
+          </div>
+        )}
+      </Card>
+
+      {/* Recent activity */}
+      {recent.length > 0 && (
+        <Card className="p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent activity</h3>
+          {recent.map((t) => (
+            <div key={t.id} className="flex items-center justify-between py-1 text-sm">
+              <span className="text-slate-600">
+                {t.type === "bill" ? `Bill ${t.meta?.billNo || ""}` : `Payment ${t.meta?.receiptNo || ""}`} · {t.date}
+              </span>
+              <span className={`font-medium ${t.type === "bill" ? "text-rose-600" : "text-sky-600"}`}>
+                {t.type === "bill" ? "+" : "−"}{money(t.amount)}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Reading entry */}
+      <Card className="p-4">
         {consumer.metered ? (
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
               <span className="text-slate-500">Previous reading</span>
               <span className="font-semibold">{reset ? "0 (reset)" : consumer.prevReading}</span>
@@ -417,12 +460,13 @@ function ReadingEntry({ consumer, tariff, arrears, onBack, onGenerate }) {
             </label>
           </div>
         ) : (
-          <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
+          <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
             Flat-rate connection (no meter). Fixed monthly charge applies.
           </div>
         )}
       </Card>
 
+      {/* Bill preview */}
       <Card className="p-4">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Bill preview</h3>
         <Line l="Units used" v={consumer.metered ? charge.units : "—"} />
@@ -435,6 +479,15 @@ function ReadingEntry({ consumer, tariff, arrears, onBack, onGenerate }) {
       <Button className="w-full py-3 text-base" disabled={!canSave} onClick={() => onGenerate(charge)}>
         Save & Print Bill
       </Button>
+    </div>
+  );
+}
+
+function Detail({ label, value }) {
+  return (
+    <div>
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className="font-medium capitalize text-slate-700">{value}</div>
     </div>
   );
 }
