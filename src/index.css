@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animate-fade-in { animation: fadeIn 0.3s ease-out both; }
+.animate-slide-up { animation: slideUp 0.25s ease-out both; }
+.animate-toast-in { animation: toastIn 0.25s ease-out both; }
+.animate-floaty { animation: floaty 3s ease-in-out infinite; }
+.animate-gradient { background-size: 200% 200%; animation: gradientShift 9s ease infinite; }
+
+/* When printing, show only the receipt OR the report (whichever is on screen) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-print,
+  #receipt-print *,
+  #print-report,
+  #print-report * {
+    visibility: visible;
+  }
+  #receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 58mm;
+  }
+  #print-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
