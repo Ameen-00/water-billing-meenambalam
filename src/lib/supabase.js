@@ -7,6 +7,6 @@ const url = import.meta.env.VITE_SUPABASE_URL || "https://vyqwqknxfufarfyukxzu.s
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5cXdxa254ZnVmYXJmeXVreHp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNzExNDcsImV4cCI6MjA5ODc0NzE0N30.OCGmjBso305pXSgk9PRVDnlZGmvwIf4VqxviSMC0iJY";
 
-// If not configured yet, the app keeps running in demo (in-memory) mode.
+// If keys are missing, the app shows a "Not connected" screen.
 export const supabase = url && anonKey ? createClient(url, anonKey) : null;
 export const isConfigured = Boolean(supabase);

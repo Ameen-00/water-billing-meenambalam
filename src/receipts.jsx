@@ -40,7 +40,7 @@ function Paper({ children }) {
 }
 
 export function BillReceipt({ data }) {
-  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName } = data;
+  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName, currReadingDate, prevReadingDate } = data;
   const qr = upiUri({ amount: totalDue, note: `${consumer.consumerNo} ${billNo}` });
   return (
     <Paper>
@@ -55,7 +55,9 @@ export function BillReceipt({ data }) {
       {charge.metered ? (
         <>
           <L l="Prev reading" r={charge.prevReading} />
+          <L l="  on" r={prevReadingDate} />
           <L l="Curr reading" r={charge.currentReading} />
+          <L l="  on" r={currReadingDate} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
           <L l="Consumption" r={`${charge.consumption} L`} />
           {charge.excessLitres > 0 && <L l="Excess" r={`${charge.excessLitres} L`} />}
@@ -72,6 +74,7 @@ export function BillReceipt({ data }) {
       <L l="Arrears" r={money(arrears)} />
       <Dashed />
       <L l="TOTAL PAYABLE" r={money(totalDue)} bold />
+      <div className="text-[9px]">Monthly minimum: {money(charge.minCharge)}</div>
       <div className="mt-1 text-[9px] italic">({amountInWords(totalDue)})</div>
       <Dashed />
       <div className="text-[9px]">
@@ -86,13 +89,14 @@ export function BillReceipt({ data }) {
       </div>
       <Dashed />
       {readerName && <div className="text-[9px]">Reader: {readerName}</div>}
-      <div className="text-center text-[10px]">Thank you!</div>
+      <div className="mt-2 text-[9px]">Reader's signature: ____________</div>
+      <div className="mt-1 text-center text-[10px]">Thank you!</div>
     </Paper>
   );
 }
 
 export function PaymentReceipt({ data }) {
-  const { consumer, amount, payerName, reference, mode, receiptNo, balanceAfter, date } = data;
+  const { consumer, amount, payerName, reference, mode, receiptNo, balanceAfter, date, alliedFor, spotBillNo, lastCharge } = data;
   const remaining = balanceAfter > 0 ? balanceAfter : 0;
   const credit = balanceAfter < 0 ? -balanceAfter : 0;
   return (
@@ -102,14 +106,26 @@ export function PaymentReceipt({ data }) {
       <L l="Receipt No" r={receiptNo} />
       <L l="Date" r={date} />
       <L l="Con. No" r={consumer.consumerNo} />
+      {spotBillNo && <L l="Spot Bill No" r={spotBillNo} />}
       <L l="From" r={payerName || consumer.name} />
       <Dashed />
       <L l="Received Rs" r={money(amount)} bold />
       <L l="Mode" r={mode} />
       {payerName && payerName !== consumer.name && <L l="(for)" r={consumer.name} />}
       {reference && <L l="Ref" r={reference} />}
+      {alliedFor && <L l="Allied for" r={alliedFor} />}
       <Dashed />
       {credit > 0 ? <L l="Advance credit" r={money(credit)} bold /> : <L l="Balance due" r={money(remaining)} bold />}
+      {lastCharge && (
+        <>
+          <Dashed />
+          <div className="text-[9px] font-bold">Bill charges (ref)</div>
+          <L l="Water charge" r={money(lastCharge.waterCharge)} />
+          <L l="Meter fund" r={money(lastCharge.meterFund)} />
+          <L l="Fine / others" r={money(lastCharge.fine)} />
+          <L l="Total" r={money(lastCharge.currentCharge)} bold />
+        </>
+      )}
       <div className="mt-1 text-[9px] italic">({amountInWords(amount)} received)</div>
       <Dashed />
       <div className="text-center text-[11px] font-bold tracking-wider">✓ PAID</div>

@@ -94,6 +94,7 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
     consumption,
     freeLitres: t.freeLitres,
     excessLitres,
+    minCharge: t.minCharge,
     waterCharge,
     meterFund: t.meterFund,
     maintenanceFund: t.maintenanceFund,

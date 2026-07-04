@@ -67,9 +67,9 @@ export default function App() {
       const arrears = balanceOf(consumer, txns);
       const totalDue = arrears + charge.currentCharge;
       const billNo = docNo("B", seq.bill + 1);
-      const txn = await db.insertTransaction({
-        consumerId: consumer.id, type: "bill", amount: charge.currentCharge, date: today(), meta: { billNo, charge },
-      });
+      const lastBill = [...txns].reverse().find((t) => t.consumerId === consumer.id && t.type === "bill");
+      const meta = { billNo, charge };
+      const txn = await db.insertTransaction({ consumerId: consumer.id, type: "bill", amount: charge.currentCharge, date: today(), meta });
       setTxns((p) => [...p, txn]);
       if (charge.metered) {
         await db.updatePrevReading(consumer.id, charge.currentReading);
@@ -80,6 +80,8 @@ export default function App() {
         kind: "bill",
         data: {
           consumer, charge, billNo, arrears, totalDue, date: today(),
+          currReadingDate: today(),
+          prevReadingDate: lastBill?.date || "—",
           dueNoFine: addDays(tariff.dueDaysNoFine ?? 15),
           dueWithFine: addDays(tariff.dueDaysWithFine ?? 30),
           readerName: session?.user?.email || "",
@@ -91,17 +93,24 @@ export default function App() {
     }
   }
 
-  async function recordPayment(consumer, { amount, payerName, reference, mode }) {
+  async function recordPayment(consumer, { amount, payerName, reference, mode, alliedFor }) {
     try {
       const before = balanceOf(consumer, txns);
       const balanceAfter = before - amount;
       const receiptNo = docNo("R", seq.receipt + 1);
-      const txn = await db.insertTransaction({
-        consumerId: consumer.id, type: "payment", amount, date: today(), meta: { receiptNo, payerName, reference, mode },
-      });
+      const lastBill = [...txns].reverse().find((t) => t.consumerId === consumer.id && t.type === "bill");
+      const meta = { receiptNo, payerName, reference, mode, alliedFor };
+      const txn = await db.insertTransaction({ consumerId: consumer.id, type: "payment", amount, date: today(), meta });
       setTxns((p) => [...p, txn]);
       setSeq((s) => ({ ...s, receipt: s.receipt + 1 }));
-      setReceipt({ kind: "payment", data: { consumer, amount, payerName, reference, mode, receiptNo, balanceAfter, date: today() } });
+      setReceipt({
+        kind: "payment",
+        data: {
+          consumer, amount, payerName, reference, mode, alliedFor, receiptNo, balanceAfter, date: today(),
+          spotBillNo: lastBill?.meta?.billNo || "—",
+          lastCharge: lastBill?.meta?.charge || null,
+        },
+      });
       toast.success(`Payment ${receiptNo} recorded`);
     } catch (e) {
       toast.error("Could not save the payment: " + e.message);
@@ -534,6 +543,7 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
   const [amount, setAmount] = useState(String(Math.max(0, balance)));
   const [payerName, setPayerName] = useState(consumer.name);
   const [reference, setReference] = useState("");
+  const [alliedFor, setAlliedFor] = useState("");
   const [mode, setMode] = useState("UPI");
   const value = Number(amount) || 0;
   const after = balance - value;
@@ -570,6 +580,10 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
           <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. UPI 4432 (son's a/c)" className={inputClass} />
         </Field>
 
+        <Field label="Allied charge for (optional)" hint="e.g. new connection, reconnection">
+          <input value={alliedFor} onChange={(e) => setAlliedFor(e.target.value)} className={inputClass} />
+        </Field>
+
         <div className={`rounded-xl px-3 py-2 text-sm ring-1 ${after < 0 ? "bg-sky-50 ring-sky-200" : "bg-slate-50 ring-slate-200"}`}>
           {after < 0 ? (
             <span className="text-sky-700">Overpayment — <b>{money(-after)}</b> kept as advance credit.</span>
@@ -581,7 +595,7 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
 
       <div className="mt-4 flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={onClose}>Cancel</Button>
-        <Button variant="gold" className="flex-1" disabled={value <= 0} onClick={() => onConfirm({ amount: value, payerName: payerName.trim() || consumer.name, reference: reference.trim(), mode })}>
+        <Button variant="gold" className="flex-1" disabled={value <= 0} onClick={() => onConfirm({ amount: value, payerName: payerName.trim() || consumer.name, reference: reference.trim(), mode, alliedFor: alliedFor.trim() })}>
           Confirm & Print Receipt
         </Button>
       </div>
