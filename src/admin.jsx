@@ -243,7 +243,7 @@ function LedgerRow({ row, consumerName }) {
         </div>
         <div className="ml-8 truncate text-xs text-slate-400">
           {t.date}
-          {isBill && t.meta.charge?.metered ? ` · reading ${t.meta.charge.prevReading} → ${t.meta.charge.currentReading} (${t.meta.charge.consumption} L)` : ""}
+          {isBill && t.meta.charge?.metered ? ` · reading ${t.meta.charge.prevReading} → ${t.meta.charge.currentReading}${t.meta.charge.consumption != null ? ` (${t.meta.charge.consumption} L)` : ""}` : ""}
           {isBill && t.meta.charge && !t.meta.charge.metered ? " · flat charge" : ""}
           {!isBill && t.meta.mode ? ` · ${t.meta.mode}` : ""}
           {!isBill && t.meta.payerName && t.meta.payerName !== consumerName ? ` · by ${t.meta.payerName}` : ""}

@@ -8,6 +8,7 @@ import { WaterDrop, Avatar, Card, Button, Field, inputClass, Modal, BalancePill 
 import { AdminArea } from "./admin";
 import { ReceiptModal } from "./receipts";
 import { Toaster, toast } from "./toast";
+import { LangProvider, useLang } from "./i18n";
 
 function today() {
   return new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -20,6 +21,14 @@ function addDays(n) {
 }
 
 export default function App() {
+  return (
+    <LangProvider>
+      <AppInner />
+    </LangProvider>
+  );
+}
+
+function AppInner() {
   const [session, setSession] = useState(undefined); // undefined=checking, null=logged out
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -253,6 +262,7 @@ function Login() {
 }
 
 function TopBar({ role, setRole, email, userRole }) {
+  const { lang, setLang, t } = useLang();
   return (
     <header className="animate-gradient relative overflow-hidden bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 text-white shadow-lg">
       <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
@@ -262,7 +272,7 @@ function TopBar({ role, setRole, email, userRole }) {
           </div>
           <div>
             <h1 className="text-base font-bold leading-tight sm:text-lg">{scheme.name}</h1>
-            <p className="text-xs text-blue-100">{scheme.malayalamName} · Billing System</p>
+            <p className="text-xs text-blue-100">{scheme.malayalamName} · {t("billingSystem")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -281,6 +291,12 @@ function TopBar({ role, setRole, email, userRole }) {
           ) : (
             <span className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/15">Meter Reader</span>
           )}
+          <button
+            onClick={() => setLang(lang === "en" ? "ml" : "en")}
+            className="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-bold ring-1 ring-white/15 hover:bg-white/25"
+          >
+            {lang === "en" ? "മല" : "EN"}
+          </button>
           <button
             onClick={() => supabase.auth.signOut()}
             title={email ? `Sign out (${email})` : "Sign out"}
@@ -303,6 +319,7 @@ function TopBar({ role, setRole, email, userRole }) {
 // METER READER FLOW
 // ---------------------------------------------------------------------------
 function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
+  const { t: tr } = useLang();
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("pending"); // pending | all | done
@@ -339,20 +356,20 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   });
 
   const chips = [
-    { key: "pending", label: `Pending (${total - doneCount})` },
-    { key: "all", label: `All (${total})` },
-    { key: "done", label: `Billed (${doneCount})` },
+    { key: "pending", label: `${tr("pending")} (${total - doneCount})` },
+    { key: "all", label: `${tr("all")} (${total})` },
+    { key: "done", label: `${tr("billedChip")} (${doneCount})` },
   ];
 
   return (
     <div className="mx-auto max-w-md">
       <div className="mb-3">
-        <h2 className="text-lg font-bold">Meter Reading</h2>
-        <p className="text-sm text-slate-500">This month's progress — read in any order</p>
+        <h2 className="text-lg font-bold">{tr("meterReading")}</h2>
+        <p className="text-sm text-slate-500">{tr("monthProgress")}</p>
         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
           <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: pct + "%" }} />
         </div>
-        <p className="mt-1 text-xs text-slate-500">{doneCount} of {total} billed ({pct}%)</p>
+        <p className="mt-1 text-xs text-slate-500">{doneCount} {tr("of")} {total} {tr("billedWord")} ({pct}%)</p>
       </div>
 
       <div className="mb-3 flex items-center gap-2 rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
@@ -362,7 +379,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search the house you're at — name, no, meter…"
+          placeholder={tr("searchHouse")}
           className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
         />
       </div>
@@ -389,7 +406,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate font-semibold">{c.name}</span>
-                  {done && <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">✓ billed</span>}
+                  {done && <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">✓ {tr("billedWord")}</span>}
                 </div>
                 <div className="truncate text-xs text-slate-500">{c.consumerNo} · {c.meterNo}</div>
               </div>
@@ -398,7 +415,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
           );
         })}
         {list.length === 0 && (
-          <div className="rounded-xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">No houses match.</div>
+          <div className="rounded-xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">{tr("noHouses")}</div>
         )}
       </div>
     </div>
@@ -406,6 +423,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
 }
 
 function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay }) {
+  const { t: tr } = useLang();
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
   const charge = calculateCharge(consumer, reading, tariff, reset);
@@ -418,7 +436,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
 
   return (
     <div className="mx-auto max-w-md space-y-3">
-      <button onClick={onBack} className="text-sm font-medium text-blue-700 hover:underline">← Back to route</button>
+      <button onClick={onBack} className="text-sm font-medium text-blue-700 hover:underline">{tr("backToRoute")}</button>
 
       {/* Customer profile */}
       <Card className="p-4">
@@ -432,25 +450,25 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <Detail label="Category" value={categoryLabel(consumer.category)} />
-          <Detail label="Connection" value={consumer.metered ? "Metered" : "Flat-rate"} />
-          <Detail label="Status" value={consumer.status} />
+          <Detail label={tr("category")} value={categoryLabel(consumer.category)} />
+          <Detail label={tr("connection")} value={consumer.metered ? tr("metered") : tr("flatRate")} />
+          <Detail label={tr("statusL")} value={consumer.status} />
           <Detail
-            label="Phone"
+            label={tr("phone")}
             value={consumer.phone ? <a href={`tel:${consumer.phone}`} className="font-medium text-blue-700 underline">{consumer.phone}</a> : "—"}
           />
-          <div className="col-span-2"><Detail label="Address" value={consumer.address || "—"} /></div>
+          <div className="col-span-2"><Detail label={tr("address")} value={consumer.address || "—"} /></div>
         </div>
 
         {arrears > 0 && (
           <div className="mt-3 flex items-center justify-between rounded-xl bg-rose-50 px-3 py-2 text-sm ring-1 ring-rose-200">
-            <span className="text-slate-600">Outstanding dues</span>
+            <span className="text-slate-600">{tr("outstandingDues")}</span>
             <span className="font-bold text-rose-600">{money(arrears)}</span>
           </div>
         )}
         {onPay && (
           <Button variant="gold" className="mt-3 w-full" onClick={() => onPay(consumer)}>
-            Record Payment
+            {tr("recordPayment")}
           </Button>
         )}
       </Card>
@@ -458,16 +476,16 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
       {/* Recent activity */}
       {recent.length > 0 && (
         <Card className="p-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent activity</h3>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("recentActivity")}</h3>
           {recent.map((t) => (
             <div key={t.id} className="flex items-center justify-between py-1.5 text-sm">
               <div className="min-w-0">
                 <div className="text-slate-700">
-                  {t.type === "bill" ? `Bill ${t.meta?.billNo || ""}` : `Payment ${t.meta?.receiptNo || ""}`}
+                  {t.type === "bill" ? `${tr("bill")} ${t.meta?.billNo || ""}` : `${tr("payment")} ${t.meta?.receiptNo || ""}`}
                 </div>
                 <div className="truncate text-xs text-slate-400">
                   {t.date}
-                  {t.type === "bill" && t.meta?.charge?.metered ? ` · reading ${t.meta.charge.prevReading}→${t.meta.charge.currentReading} (${t.meta.charge.units}u)` : ""}
+                  {t.type === "bill" && t.meta?.charge?.metered ? ` · ${t.meta.charge.prevReading}→${t.meta.charge.currentReading}${t.meta.charge.consumption != null ? ` (${t.meta.charge.consumption} L)` : ""}` : ""}
                   {t.type === "payment" && t.meta?.mode ? ` · ${t.meta.mode}` : ""}
                 </div>
               </div>
@@ -484,10 +502,10 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         {consumer.metered ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
-              <span className="text-slate-500">Previous reading</span>
-              <span className="font-semibold">{reset ? "0 (reset)" : consumer.prevReading}</span>
+              <span className="text-slate-500">{tr("prevReading")}</span>
+              <span className="font-semibold">{reset ? "0" : consumer.prevReading}</span>
             </div>
-            <Field label="Current reading">
+            <Field label={tr("currReading")}>
               <input
                 type="number" inputMode="numeric" value={reading}
                 onChange={(e) => setReading(e.target.value)}
@@ -497,38 +515,38 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
             </Field>
             {readingLow && (
               <p className="text-xs text-rose-600">
-                Reading is below previous ({consumer.prevReading}). If the meter was replaced, tick the box below.
+                {tr("readingLow")} ({consumer.prevReading}).
               </p>
             )}
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={reset} onChange={(e) => setReset(e.target.checked)} className="h-4 w-4 rounded" />
-              Meter was replaced / reset (count from 0)
+              {tr("meterReset")}
             </label>
           </div>
         ) : (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
-            Flat-rate connection (no meter). Fixed monthly charge applies.
+            {tr("flatNote")}
           </div>
         )}
       </Card>
 
       {/* Bill preview */}
       <Card className="p-4">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Bill preview</h3>
-        <Line l="Consumption" v={consumer.metered ? `${charge.consumption} L` : "—"} />
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("billPreview")}</h3>
+        <Line l={tr("consumption")} v={consumer.metered ? `${charge.consumption} L` : "—"} />
         {charge.excessLitres > 0 && <Line l="Excess litres" v={`${charge.excessLitres} L`} />}
-        <Line l="Water charge" v={money(charge.waterCharge)} />
-        <Line l="Meter fund" v={money(charge.meterFund)} />
-        <Line l="Maintenance fund" v={money(charge.maintenanceFund)} />
-        {charge.fine > 0 && <Line l="Fine / others" v={money(charge.fine)} />}
-        <Line l="This bill" v={money(charge.currentCharge)} />
-        <Line l="Previous arrears" v={money(arrears)} />
+        <Line l={tr("waterCharge")} v={money(charge.waterCharge)} />
+        <Line l={tr("meterFund")} v={money(charge.meterFund)} />
+        <Line l={tr("maintenanceFund")} v={money(charge.maintenanceFund)} />
+        {charge.fine > 0 && <Line l={tr("fineOthers")} v={money(charge.fine)} />}
+        <Line l={tr("thisBill")} v={money(charge.currentCharge)} />
+        <Line l={tr("prevArrears")} v={money(arrears)} />
         <div className="my-2 border-t border-dashed border-slate-200" />
-        <Line l="TOTAL PAYABLE" v={money(totalDue)} bold />
+        <Line l={tr("totalPayable")} v={money(totalDue)} bold />
       </Card>
 
       <Button className="w-full py-3 text-base" disabled={!canSave} onClick={() => onGenerate(charge)}>
-        Save & Print Bill
+        {tr("savePrintBill")}
       </Button>
     </div>
   );
