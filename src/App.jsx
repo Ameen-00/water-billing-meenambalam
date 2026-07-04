@@ -421,10 +421,17 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate }) {
         <Card className="p-4">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Recent activity</h3>
           {recent.map((t) => (
-            <div key={t.id} className="flex items-center justify-between py-1 text-sm">
-              <span className="text-slate-600">
-                {t.type === "bill" ? `Bill ${t.meta?.billNo || ""}` : `Payment ${t.meta?.receiptNo || ""}`} · {t.date}
-              </span>
+            <div key={t.id} className="flex items-center justify-between py-1.5 text-sm">
+              <div className="min-w-0">
+                <div className="text-slate-700">
+                  {t.type === "bill" ? `Bill ${t.meta?.billNo || ""}` : `Payment ${t.meta?.receiptNo || ""}`}
+                </div>
+                <div className="truncate text-xs text-slate-400">
+                  {t.date}
+                  {t.type === "bill" && t.meta?.charge?.metered ? ` · reading ${t.meta.charge.prevReading}→${t.meta.charge.currentReading} (${t.meta.charge.units}u)` : ""}
+                  {t.type === "payment" && t.meta?.mode ? ` · ${t.meta.mode}` : ""}
+                </div>
+              </div>
               <span className={`font-medium ${t.type === "bill" ? "text-rose-600" : "text-sky-600"}`}>
                 {t.type === "bill" ? "+" : "−"}{money(t.amount)}
               </span>
