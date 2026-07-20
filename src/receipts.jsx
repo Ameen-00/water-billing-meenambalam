@@ -17,6 +17,16 @@ function Dashed() {
   return <div className="my-1 border-t border-dashed border-slate-400" />;
 }
 
+// RawBT's free version stamps its advert into the print at a fixed distance
+// from the top. We leave a deliberate blank band there so it lands in empty
+// space instead of cutting through the readings.
+// Tune this if the advert still overlaps: bigger = taller gap.
+const WATERMARK_GAP_MM = 22;
+
+function WatermarkGap() {
+  return <div aria-hidden="true" style={{ height: `${WATERMARK_GAP_MM}mm` }} />;
+}
+
 function Head({ title }) {
   return (
     <div className="text-center">
@@ -55,6 +65,10 @@ export function BillReceipt({ data }) {
       {consumer.address && <div className="text-[10px] leading-tight">{consumer.address}</div>}
       {consumer.phone && <L l="Mobile" r={consumer.phone} />}
       <L l="Meter" r={consumer.meterNo} />
+
+      {/* blank band reserved for RawBT's advert — keeps it off the readings */}
+      <WatermarkGap />
+
       <Dashed />
       {charge.disconnected ? (
         <L l="Connection" r="Disconnected" />
@@ -117,6 +131,10 @@ export function PaymentReceipt({ data }) {
       <L l="Con. No" r={consumer.consumerNo} />
       {spotBillNo && <L l="Spot Bill No" r={spotBillNo} />}
       <L l="From" r={payerName || consumer.name} />
+
+      {/* blank band reserved for RawBT's advert */}
+      <WatermarkGap />
+
       <Dashed />
       <L l="Received Rs" r={money(amount)} bold />
       <L l="Mode" r={mode} />
