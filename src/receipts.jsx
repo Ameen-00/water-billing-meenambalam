@@ -52,29 +52,34 @@ export function BillReceipt({ data }) {
       <L l="Name" r={consumer.name} />
       <L l="Meter" r={consumer.meterNo} />
       <Dashed />
-      {charge.metered ? (
+      {charge.disconnected ? (
+        <L l="Connection" r="Disconnected" />
+      ) : charge.metered ? (
         <>
           <L l="Prev reading" r={charge.prevReading} />
           <L l="  on" r={prevReadingDate} />
           <L l="Curr reading" r={charge.currentReading} />
           <L l="  on" r={currReadingDate} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
-          <L l="Consumption" r={`${charge.consumption} L`} />
-          {charge.excessLitres > 0 && <L l="Excess" r={`${charge.excessLitres} L`} />}
+          <L l="Consumption" r={`${charge.consumption.toLocaleString("en-IN")} L`} />
         </>
       ) : (
         <L l="Connection" r="Flat-rate (no meter)" />
       )}
       <Dashed />
+      {charge.parts.map((p, i) => (
+        <div key={i}>
+          <L l={p.label} r={money(p.amount)} />
+          {p.detail && <div className="pl-1 text-[9px]">{p.detail}</div>}
+        </div>
+      ))}
       <L l="Water charge" r={money(charge.waterCharge)} />
-      <L l="Meter fund" r={money(charge.meterFund)} />
-      <L l="Maintenance fund" r={money(charge.maintenanceFund)} />
-      <L l="Fine / others" r={money(charge.fine)} />
+      <L l="Meter fee" r={money(charge.meterFee)} />
+      <Dashed />
       <L l="This bill" r={money(charge.currentCharge)} bold />
       <L l="Arrears" r={money(arrears)} />
       <Dashed />
       <L l="TOTAL PAYABLE" r={money(totalDue)} bold />
-      <div className="text-[9px]">Monthly minimum: {money(charge.minCharge)}</div>
       <div className="mt-1 text-[9px] italic">({amountInWords(totalDue)})</div>
       <Dashed />
       <div className="text-[9px]">
@@ -121,8 +126,7 @@ export function PaymentReceipt({ data }) {
           <Dashed />
           <div className="text-[9px] font-bold">Bill charges (ref)</div>
           <L l="Water charge" r={money(lastCharge.waterCharge)} />
-          <L l="Meter fund" r={money(lastCharge.meterFund)} />
-          <L l="Fine / others" r={money(lastCharge.fine)} />
+          <L l="Meter fee" r={money(lastCharge.meterFee)} />
           <L l="Total" r={money(lastCharge.currentCharge)} bold />
         </>
       )}

@@ -429,8 +429,9 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const charge = calculateCharge(consumer, reading, tariff, reset);
   const totalDue = arrears + charge.currentCharge;
 
-  const readingLow = consumer.metered && !reset && reading !== "" && Number(reading) < consumer.prevReading;
-  const canSave = !consumer.metered || (reading !== "" && !readingLow);
+  const isDisc = consumer.status === "disconnected";
+  const readingLow = !isDisc && consumer.metered && !reset && reading !== "" && Number(reading) < consumer.prevReading;
+  const canSave = isDisc || !consumer.metered || (reading !== "" && !readingLow);
 
   const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
 
@@ -499,7 +500,11 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
 
       {/* Reading entry */}
       <Card className="p-4">
-        {consumer.metered ? (
+        {isDisc ? (
+          <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
+            {tr("disconnectedNote")}
+          </div>
+        ) : consumer.metered ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
               <span className="text-slate-500">{tr("prevReading")}</span>
@@ -533,12 +538,20 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
       {/* Bill preview */}
       <Card className="p-4">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("billPreview")}</h3>
-        <Line l={tr("consumption")} v={consumer.metered ? `${charge.consumption} L` : "—"} />
-        {charge.excessLitres > 0 && <Line l="Excess litres" v={`${charge.excessLitres} L`} />}
+        <Line l={tr("consumption")} v={charge.disconnected ? "—" : `${charge.consumption.toLocaleString("en-IN")} L`} />
+        <div className="my-2 border-t border-dashed border-slate-200" />
+        {charge.parts.map((p, i) => (
+          <div key={i} className="py-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">{p.label}</span>
+              <span className="font-medium">{money(p.amount)}</span>
+            </div>
+            {p.detail && <div className="text-xs text-slate-400">{p.detail}</div>}
+          </div>
+        ))}
         <Line l={tr("waterCharge")} v={money(charge.waterCharge)} />
-        <Line l={tr("meterFund")} v={money(charge.meterFund)} />
-        <Line l={tr("maintenanceFund")} v={money(charge.maintenanceFund)} />
-        {charge.fine > 0 && <Line l={tr("fineOthers")} v={money(charge.fine)} />}
+        <Line l={tr("meterFee")} v={money(charge.meterFee)} />
+        <div className="my-2 border-t border-dashed border-slate-200" />
         <Line l={tr("thisBill")} v={money(charge.currentCharge)} />
         <Line l={tr("prevArrears")} v={money(arrears)} />
         <div className="my-2 border-t border-dashed border-slate-200" />

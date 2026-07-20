@@ -392,37 +392,61 @@ function Settings({ tariff, setTariff, onAddConsumer }) {
       </div>
 
       <Card className="p-4">
-        <h3 className="mb-3 font-semibold">Water charge</h3>
+        <h3 className="mb-1 font-semibold">Slabs — first 15,000 L</h3>
+        <p className="mb-3 text-xs text-slate-500">A flat amount, based on which slab the consumption falls in.</p>
+        <div className="space-y-2">
+          {(form.slabs || []).map((s, i) => (
+            <div key={i} className="grid grid-cols-2 gap-3">
+              <Field label={`Slab ${i + 1} — up to (L)`}>
+                <input type="number" className={inputClass} value={s.upTo}
+                  onChange={(e) => update((n, v) => (n.slabs[i].upTo = v), e.target.value)} />
+              </Field>
+              <Field label="Charge (₹)">
+                <input type="number" className={inputClass} value={s.amount}
+                  onChange={(e) => update((n, v) => (n.slabs[i].amount = v), e.target.value)} />
+              </Field>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <h3 className="mb-1 font-semibold">Above the slabs</h3>
+        <p className="mb-3 text-xs text-slate-500">Only the litres inside each band are charged at that band's rate.</p>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Monthly minimum (₹)" hint="covers the included litres">
-            <input type="number" className={inputClass} value={form.minCharge}
-              onChange={(e) => update((n, v) => (n.minCharge = v), e.target.value)} />
+          <Field label="15,001–20,000: rate (₹)">
+            <input type="number" step="0.01" className={inputClass} value={form.midRate}
+              onChange={(e) => update((n, v) => (n.midRate = v), e.target.value)} />
           </Field>
-          <Field label="Litres included">
-            <input type="number" className={inputClass} value={form.freeLitres}
-              onChange={(e) => update((n, v) => (n.freeLitres = v), e.target.value)} />
+          <Field label="…per litres">
+            <input type="number" className={inputClass} value={form.midPer}
+              onChange={(e) => update((n, v) => (n.midPer = v), e.target.value)} />
           </Field>
-          <Field label="Excess (₹ per litre)" hint="above the included litres">
-            <input type="number" step="0.01" className={inputClass} value={form.excessPerLitre}
-              onChange={(e) => update((n, v) => (n.excessPerLitre = v), e.target.value)} />
+          <Field label="Above 20,000 — Jan–May (₹)">
+            <input type="number" step="0.01" className={inputClass} value={form.highRateJanMay}
+              onChange={(e) => update((n, v) => (n.highRateJanMay = v), e.target.value)} />
+          </Field>
+          <Field label="Above 20,000 — Jun–Dec (₹)">
+            <input type="number" step="0.01" className={inputClass} value={form.highRateJunDec}
+              onChange={(e) => update((n, v) => (n.highRateJunDec = v), e.target.value)} />
+          </Field>
+          <Field label="…per litres">
+            <input type="number" className={inputClass} value={form.highPer}
+              onChange={(e) => update((n, v) => (n.highPer = v), e.target.value)} />
           </Field>
         </div>
       </Card>
 
       <Card className="p-4">
-        <h3 className="mb-3 font-semibold">Funds & fine</h3>
+        <h3 className="mb-3 font-semibold">Other charges</h3>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Meter fund (₹)">
-            <input type="number" className={inputClass} value={form.meterFund}
-              onChange={(e) => update((n, v) => (n.meterFund = v), e.target.value)} />
+          <Field label="Meter fee (₹)" hint="added to every bill">
+            <input type="number" className={inputClass} value={form.meterFee}
+              onChange={(e) => update((n, v) => (n.meterFee = v), e.target.value)} />
           </Field>
-          <Field label="Maintenance fund (₹)">
-            <input type="number" className={inputClass} value={form.maintenanceFund}
-              onChange={(e) => update((n, v) => (n.maintenanceFund = v), e.target.value)} />
-          </Field>
-          <Field label="Fine / others (₹)">
-            <input type="number" className={inputClass} value={form.fine}
-              onChange={(e) => update((n, v) => (n.fine = v), e.target.value)} />
+          <Field label="Disconnected charge (₹)">
+            <input type="number" className={inputClass} value={form.disconnectedCharge}
+              onChange={(e) => update((n, v) => (n.disconnectedCharge = v), e.target.value)} />
           </Field>
         </div>
       </Card>

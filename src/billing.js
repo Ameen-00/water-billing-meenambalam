@@ -1,10 +1,13 @@
 // ---------------------------------------------------------------------------
 // Water Billing — data, config, and calculation logic
 //
-// Models the real "Kolayil Kudivella Suchithwa Samithi" bill/notice:
-//   water charge (minimum + excess per litre) + meter fund + maintenance fund
-//   + fine/others + arrears = total payable.
-// All numbers are EXAMPLES, editable in Admin → Settings. Real values after 12th.
+// Kolayil Kudivella Suchithwa Samithi tariff (slab based, split calculation):
+//   0–7,000 L        -> ₹75          |  7,001–10,000 L  -> ₹100
+//   10,001–12,500 L  -> ₹125         |  12,501–15,000 L -> ₹150
+//   15,001–20,000 L  -> ₹5 per 100 L (on that portion only)
+//   Above 20,000 L   -> Jan–May ₹10 per 50 L, Jun–Dec ₹5 per 50 L (that portion)
+//   + ₹5 meter fee on every bill.  Disconnected -> ₹30 + ₹5 meter fee.
+// Each band is charged separately and shown as its own line on the bill.
 // ---------------------------------------------------------------------------
 
 export const CURRENCY = "₹";
@@ -21,35 +24,32 @@ export const scheme = {
   },
 };
 
-// Tariff — EXAMPLE numbers. Edit in Admin → Settings; real values plug in later.
 export const initialTariff = {
-  minCharge: 100,        // monthly minimum (covers the included litres)
-  freeLitres: 15000,     // litres included in the minimum charge
-  excessPerLitre: 0.5,   // ₹ per litre above the included litres
-  meterFund: 20,         // fixed meter fund per bill
-  maintenanceFund: 30,   // fixed maintenance fund per bill
-  fine: 0,               // fine / others (default 0)
-  dueDaysNoFine: 15,     // days to pay without fine
-  dueDaysWithFine: 30,   // days to pay with fine
+  // Flat slabs covering the first 15,000 litres
+  slabs: [
+    { upTo: 7000, amount: 75 },
+    { upTo: 10000, amount: 100 },
+    { upTo: 12500, amount: 125 },
+    { upTo: 15000, amount: 150 },
+  ],
+  // Middle band: 15,001–20,000 at ₹5 per 100 L (that portion only)
+  midFrom: 15000, midTo: 20000, midPer: 100, midRate: 5,
+  // High band: above 20,000, seasonal, per 50 L (that portion only)
+  highFrom: 20000, highPer: 50, highRateJanMay: 10, highRateJunDec: 5,
+  meterFee: 5,
+  disconnectedCharge: 30,
+  dueDaysNoFine: 15,
+  dueDaysWithFine: 30,
 };
 
-// Consumer number is the true identity. `category` is metadata only now —
-// the tariff is the same for everyone (matching the real single-rate scheme).
-export const initialConsumers = [
-  { id: "C001", consumerNo: "KWS-1001", name: "Rajan Nair",     meterNo: "M-101", address: "Meenambalam", category: "domestic",   metered: true,  prevReading: 12000, openingArrears: 0,   phone: "98470 11111", status: "active" },
-  { id: "C002", consumerNo: "KWS-1002", name: "Suja Kumari",    meterNo: "M-102", address: "Meenambalam", category: "domestic",   metered: true,  prevReading: 8500,  openingArrears: 150, phone: "98470 22222", status: "active" },
-  { id: "C003", consumerNo: "KWS-1003", name: "Ayesha Beevi",   meterNo: "F-201", address: "Kalluvathukkal", category: "domestic", metered: false, prevReading: 0,   openingArrears: 300, phone: "98470 33333", status: "active" },
-  { id: "C004", consumerNo: "KWS-1004", name: "Krishna Stores", meterNo: "M-301", address: "Kalluvathukkal", category: "commercial", metered: true, prevReading: 30000, openingArrears: 540, phone: "98470 44444", status: "active" },
-  { id: "C005", consumerNo: "KWS-1005", name: "Beena Thomas",   meterNo: "M-103", address: "Meenambalam", category: "domestic",   metered: true,  prevReading: 4000,  openingArrears: 80,  phone: "98470 55555", status: "active" },
-  { id: "C006", consumerNo: "KWS-1006", name: "Faisal M",       meterNo: "M-104", address: "Meenambalam", category: "domestic",   metered: true,  prevReading: 15600, openingArrears: 0,   phone: "98470 66666", status: "active" },
-];
-
-// Format money, e.g. 1500 -> "₹1,500", -200.5 -> "-₹200.5"
 export function money(n) {
   const v = Math.round((Math.abs(n) + Number.EPSILON) * 100) / 100;
   const s = CURRENCY + v.toLocaleString("en-IN");
   return n < 0 ? "-" + s : s;
 }
+
+const grp = (n) => Number(n).toLocaleString("en-IN");
+const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export function categoryLabel(c) {
   return c ? c.charAt(0).toUpperCase() + c.slice(1) : "—";
@@ -62,49 +62,97 @@ export function balanceOf(consumer, txns) {
     .reduce((b, t) => (t.type === "bill" ? b + t.amount : b - t.amount), consumer.openingArrears);
 }
 
-// -- THE CORE CALCULATION -------------------------------------------------
-export function calculateCharge(consumer, currentReading, tariff, meterReset = false) {
-  const t = {
-    minCharge: tariff.minCharge ?? 100,
-    freeLitres: tariff.freeLitres ?? 15000,
-    excessPerLitre: tariff.excessPerLitre ?? 0.5,
-    meterFund: tariff.meterFund ?? 0,
-    maintenanceFund: tariff.maintenanceFund ?? 0,
-    fine: tariff.fine ?? 0,
-  };
+// Is this bill month in the Jan–May season?
+export function isJanMay(date = new Date()) {
+  const m = date.getMonth() + 1;
+  return m >= 1 && m <= 5;
+}
+
+// -- THE CORE CALCULATION (split band by band) ----------------------------
+export function calculateCharge(consumer, currentReading, tariff, meterReset = false, billDate = new Date()) {
+  const t = { ...initialTariff, ...(tariff || {}) };
+  const meterFee = Number(t.meterFee ?? 5);
+
+  // Disconnected connections: flat charge + meter fee, no reading needed.
+  if (consumer.status === "disconnected") {
+    const amt = Number(t.disconnectedCharge ?? 30);
+    return {
+      metered: false, disconnected: true, meterReset: false,
+      prevReading: consumer.prevReading, currentReading: null, consumption: 0,
+      parts: [{ label: "Disconnected", detail: "", amount: amt }],
+      waterCharge: amt, meterFee, currentCharge: Math.round(amt + meterFee), season: null,
+    };
+  }
 
   let consumption = 0;
   let prev = consumer.prevReading;
   let curr = null;
-
   if (consumer.metered) {
     curr = Number(currentReading);
     consumption = meterReset ? Math.max(0, curr) : Math.max(0, curr - consumer.prevReading);
     if (meterReset) prev = 0;
   }
 
-  const excessLitres = Math.max(0, consumption - t.freeLitres);
-  const waterCharge = t.minCharge + excessLitres * t.excessPerLitre;
-  const currentCharge = waterCharge + t.meterFund + t.maintenanceFund + t.fine;
+  const parts = [];
+  const slabs = t.slabs && t.slabs.length ? t.slabs : initialTariff.slabs;
+  const topSlab = slabs[slabs.length - 1];
+
+  // 1) Base slab — covers the first 15,000 L
+  let base = Number(topSlab.amount);
+  let baseLabel = `First ${grp(topSlab.upTo)} L`;
+  for (let i = 0; i < slabs.length; i++) {
+    if (consumption <= Number(slabs[i].upTo)) {
+      base = Number(slabs[i].amount);
+      const from = i === 0 ? 0 : Number(slabs[i - 1].upTo) + 1;
+      baseLabel = `${grp(from)}–${grp(slabs[i].upTo)} L`;
+      break;
+    }
+  }
+  parts.push({ label: baseLabel, detail: "", amount: base });
+
+  // 2) Middle band — only the litres between midFrom and midTo
+  const midFrom = Number(t.midFrom ?? 15000);
+  const midTo = Number(t.midTo ?? 20000);
+  const midPer = Number(t.midPer ?? 100);
+  const midRate = Number(t.midRate ?? 5);
+  const midLitres = Math.max(0, Math.min(consumption, midTo) - midFrom);
+  let midAmount = 0;
+  if (midLitres > 0) {
+    midAmount = r2((midLitres / midPer) * midRate);
+    parts.push({
+      label: `${grp(midFrom + 1)}–${grp(midTo)} L`,
+      detail: `${grp(midLitres)} L @ ${CURRENCY}${midRate}/${grp(midPer)} L`,
+      amount: midAmount,
+    });
+  }
+
+  // 3) High band — only the litres above highFrom, seasonal rate
+  const highFrom = Number(t.highFrom ?? 20000);
+  const highPer = Number(t.highPer ?? 50);
+  const janMay = isJanMay(billDate);
+  const highRate = Number(janMay ? (t.highRateJanMay ?? 10) : (t.highRateJunDec ?? 5));
+  const highLitres = Math.max(0, consumption - highFrom);
+  let highAmount = 0;
+  if (highLitres > 0) {
+    highAmount = r2((highLitres / highPer) * highRate);
+    parts.push({
+      label: `Above ${grp(highFrom)} L`,
+      detail: `${grp(highLitres)} L @ ${CURRENCY}${highRate}/${grp(highPer)} L`,
+      amount: highAmount,
+    });
+  }
+
+  const waterCharge = r2(base + midAmount + highAmount);
 
   return {
-    metered: consumer.metered,
-    prevReading: prev,
-    currentReading: curr,
-    consumption,
-    freeLitres: t.freeLitres,
-    excessLitres,
-    minCharge: t.minCharge,
-    waterCharge,
-    meterFund: t.meterFund,
-    maintenanceFund: t.maintenanceFund,
-    fine: t.fine,
-    currentCharge,
-    meterReset,
+    metered: consumer.metered, disconnected: false, meterReset,
+    prevReading: prev, currentReading: curr, consumption,
+    parts, waterCharge, meterFee,
+    currentCharge: Math.round(waterCharge + meterFee),
+    season: janMay ? "Jan–May" : "Jun–Dec",
   };
 }
 
-// Build a UPI scan-to-pay link for the society account.
 export function upiUri({ amount, note } = {}) {
   const { vpa, payeeName } = scheme.upi;
   const p = new URLSearchParams({ pa: vpa, pn: payeeName, cu: "INR" });
@@ -117,7 +165,7 @@ export function docNo(prefix, seq) {
   return prefix + String(seq).padStart(4, "0");
 }
 
-// Amount in words (Indian system), whole rupees — for the "amount in words" line.
+// Amount in words (Indian system), whole rupees.
 export function amountInWords(num) {
   num = Math.round(num);
   if (num === 0) return "Zero Rupees";
