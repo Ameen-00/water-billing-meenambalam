@@ -323,6 +323,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("pending"); // pending | all | done
+  const [area, setArea] = useState("all");
 
   if (selected) {
     return (
@@ -347,9 +348,23 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const total = consumers.length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
+  // Locality taken from the address, so the reader can work one area at a time.
+  const areaOf = (c) => {
+    const a = String(c.address || "").replace(/\(?\s*P\.?\s*O\.?\s*\)?\s*$/i, "").trim();
+    const parts = a.split(",").map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return "—";
+    return parts.length >= 3 ? parts[parts.length - 2] : parts[parts.length - 1];
+  };
+  const shortNo = (c) => String(c.consumerNo).replace(/\D/g, "") || String(c.consumerNo);
+
+  const areaCounts = {};
+  for (const c of consumers) areaCounts[areaOf(c)] = (areaCounts[areaOf(c)] || 0) + 1;
+  const areaList = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]);
+
   const s = q.trim().toLowerCase();
   const list = consumers.filter((c) => {
-    if (s && ![c.name, c.consumerNo, c.meterNo, c.address].join(" ").toLowerCase().includes(s)) return false;
+    if (area !== "all" && areaOf(c) !== area) return false;
+    if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
     if (filter === "pending") return !isDone(c);
     if (filter === "done") return isDone(c);
     return true;
@@ -363,6 +378,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
 
   return (
     <div className="mx-auto max-w-md">
+      {/* progress */}
       <div className="mb-3">
         <h2 className="text-lg font-bold">{tr("meterReading")}</h2>
         <p className="text-sm text-slate-500">{tr("monthProgress")}</p>
@@ -372,43 +388,76 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
         <p className="mt-1 text-xs text-slate-500">{doneCount} {tr("of")} {total} {tr("billedWord")} ({pct}%)</p>
       </div>
 
-      <div className="mb-3 flex items-center gap-2 rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
-        <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" />
-        </svg>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={tr("searchHouse")}
-          className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-        />
-      </div>
+      {/* sticky controls so they stay reachable while scrolling */}
+      <div className="sticky top-0 z-10 -mx-4 space-y-2 bg-slate-50/95 px-4 pb-2 pt-2 backdrop-blur">
+        <div className="flex items-center gap-2 rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-slate-200">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" />
+          </svg>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={tr("searchHouse")}
+            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+          />
+          {q && (
+            <button onClick={() => setQ("")} className="shrink-0 text-slate-400" aria-label="clear">✕</button>
+          )}
+        </div>
 
-      <div className="mb-3 flex gap-2">
-        {chips.map((ch) => (
+        <div className="flex gap-2">
+          {chips.map((ch) => (
+            <button
+              key={ch.key}
+              onClick={() => setFilter(ch.key)}
+              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ring-1 transition ${filter === ch.key ? "bg-blue-700 text-white ring-blue-700" : "bg-white text-slate-600 ring-slate-200"}`}
+            >
+              {ch.label}
+            </button>
+          ))}
+        </div>
+
+        {/* area chips — the big win for a long list */}
+        <div className="flex gap-2 overflow-x-auto pb-1">
           <button
-            key={ch.key}
-            onClick={() => setFilter(ch.key)}
-            className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ring-1 transition ${filter === ch.key ? "bg-blue-700 text-white ring-blue-700" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`}
+            onClick={() => setArea("all")}
+            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${area === "all" ? "bg-slate-800 text-white ring-slate-800" : "bg-white text-slate-600 ring-slate-200"}`}
           >
-            {ch.label}
+            {tr("all")} ({total})
           </button>
-        ))}
+          {areaList.map(([name, count]) => (
+            <button
+              key={name}
+              onClick={() => setArea(name)}
+              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${area === name ? "bg-slate-800 text-white ring-slate-800" : "bg-white text-slate-600 ring-slate-200"}`}
+            >
+              {name} ({count})
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-2.5">
+      <p className="mb-2 mt-1 text-xs text-slate-400">{list.length} / {total}</p>
+
+      {/* compact rows */}
+      <div className="space-y-2">
         {list.map((c) => {
           const bal = balanceOf(c, txns);
           const done = isDone(c);
           return (
-            <Card key={c.id} className="flex items-center gap-3 p-3.5" onClick={() => setSelected(c)}>
-              <Avatar name={c.name} />
+            <Card key={c.id} className="flex items-center gap-3 p-3" onClick={() => setSelected(c)}>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-sm font-bold ring-1 ${done ? "bg-sky-50 text-sky-700 ring-sky-100" : "bg-blue-50 text-blue-700 ring-blue-100"}`}>
+                {shortNo(c)}
+              </span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <span className="truncate font-semibold">{c.name}</span>
-                  {done && <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">✓ {tr("billedWord")}</span>}
+                  {done && <span className="shrink-0 text-xs text-sky-600">✓</span>}
+                  {c.status === "disconnected" && (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">DC</span>
+                  )}
                 </div>
-                <div className="truncate text-xs text-slate-500">{c.consumerNo} · {c.meterNo}</div>
+                <div className="truncate text-xs text-slate-500">{areaOf(c)}</div>
               </div>
               <BalancePill amount={bal} />
             </Card>
@@ -434,6 +483,22 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const canSave = isDisc || !consumer.metered || (reading !== "" && !readingLow);
 
   const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
+
+  // --- edge-case guards -------------------------------------------------
+  // 1) Already billed this calendar month -> warn before making a second bill.
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const billedThisMonth = txns.find(
+    (t) => t.type === "bill" && t.consumerId === consumer.id && (t.createdAt || "").slice(0, 7) === monthKey
+  );
+  // 2) Reading that looks wrong (far above this house's own history).
+  const history = txns
+    .filter((t) => t.type === "bill" && t.consumerId === consumer.id && t.meta?.charge?.consumption != null)
+    .map((t) => t.meta.charge.consumption)
+    .slice(-3);
+  const avgUse = history.length ? history.reduce((a, b) => a + b, 0) / history.length : 0;
+  const highUsage =
+    !isDisc && charge.consumption > 0 &&
+    ((avgUse > 0 && charge.consumption > avgUse * 3) || charge.consumption > 50000);
 
   return (
     <div className="mx-auto max-w-md space-y-3">
@@ -473,6 +538,26 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
           </Button>
         )}
       </Card>
+
+      {/* Warnings — catch mistakes before they become real bills */}
+      {billedThisMonth && (
+        <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
+          <div className="font-semibold">⚠ {tr("alreadyBilled")}</div>
+          <div className="mt-0.5 text-xs">
+            {billedThisMonth.meta?.billNo} · {billedThisMonth.date} — {tr("alreadyBilledHint")}
+          </div>
+        </div>
+      )}
+      {highUsage && (
+        <div className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-rose-200">
+          <div className="font-semibold">⚠ {tr("highUsage")}</div>
+          {avgUse > 0 && (
+            <div className="mt-0.5 text-xs">
+              Usual ≈ {Math.round(avgUse).toLocaleString("en-IN")} L · now {charge.consumption.toLocaleString("en-IN")} L
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent activity */}
       {recent.length > 0 && (

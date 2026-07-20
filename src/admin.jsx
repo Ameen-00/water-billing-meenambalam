@@ -69,79 +69,149 @@ function AdminDashboard({ consumers, txns, onOpen, onPay, onGoReports }) {
 
   const [q, setQ] = useState("");
   const [mode, setMode] = useState("all"); // all | due
+  const [sort, setSort] = useState({ by: "no", dir: "asc" });
   const s = q.trim().toLowerCase();
 
-  const filtered = consumers.filter((c) => {
-    if (mode === "due" && balanceOf(c, txns) <= 0) return false;
-    if (!s) return true;
-    const hay = [c.name, c.consumerNo, c.meterNo, c.address].join(" ").toLowerCase();
-    const docs = (docIndex[c.id] || []).join(" ");
-    return hay.includes(s) || docs.includes(s);
-  });
+  const numOf = (c) => parseInt(String(c.consumerNo).replace(/\D/g, ""), 10) || 0;
+
+  const rows = useMemo(() => {
+    const list = consumers
+      .map((c) => ({ c, bal: balanceOf(c, txns) }))
+      .filter(({ c, bal }) => {
+        if (mode === "due" && bal <= 0) return false;
+        if (!s) return true;
+        const hay = [c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase();
+        return hay.includes(s) || (docIndex[c.id] || []).join(" ").includes(s);
+      });
+    const dir = sort.dir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      if (sort.by === "name") return String(a.c.name).localeCompare(String(b.c.name)) * dir;
+      if (sort.by === "balance") return (a.bal - b.bal) * dir;
+      return (numOf(a.c) - numOf(b.c)) * dir;
+    });
+    return list;
+  }, [consumers, txns, mode, s, sort, docIndex]);
+
+  const toggleSort = (by) => setSort((p) => ({ by, dir: p.by === by && p.dir === "asc" ? "desc" : "asc" }));
+  const arrow = (by) => (sort.by === by ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Outstanding" value={money(stats.outstanding)} tone="rose" sub={`${stats.defaulters} owe · tap`} onClick={() => setMode("due")} active={mode === "due"} />
-        <Stat label="Collected" value={money(stats.collected)} tone="sky" sub="tap for report" onClick={onGoReports} />
-        <Stat label="Consumers" value={consumers.length} tone="blue" sub="tap to show all" onClick={() => setMode("all")} active={mode === "all" && !s} />
-        <Stat label="Bills made" value={stats.bills} tone="slate" sub="tap for report" onClick={onGoReports} />
+        <Stat label="Outstanding" value={money(stats.outstanding)} tone="rose" sub={`${stats.defaulters} consumers owe`} onClick={() => setMode("due")} active={mode === "due"} />
+        <Stat label="Collected" value={money(stats.collected)} tone="sky" sub="view report" onClick={onGoReports} />
+        <Stat label="Consumers" value={consumers.length} tone="blue" sub="show all" onClick={() => { setMode("all"); setQ(""); }} active={mode === "all" && !s} />
+        <Stat label="Bills made" value={stats.bills} tone="slate" sub="view report" onClick={onGoReports} />
       </div>
 
       <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-slate-100 p-3">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" />
-          </svg>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, consumer no, meter, or bill no…"
-            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-          />
+        {/* toolbar */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
+          <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" />
+            </svg>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name, consumer no, mobile, bill no…"
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <div className="flex gap-1 rounded-xl bg-slate-50 p-1 text-xs font-semibold ring-1 ring-slate-200">
+            {[["all", "All"], ["due", "Dues only"]].map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setMode(k)}
+                className={`rounded-lg px-3 py-1.5 transition ${mode === k ? "bg-blue-700 text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {mode === "due" && (
-          <div className="flex items-center justify-between bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            <span>Showing only consumers with dues</span>
-            <button onClick={() => setMode("all")} className="font-semibold underline">Show all</button>
-          </div>
-        )}
+        {/* table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <Th onClick={() => toggleSort("no")}>No.{arrow("no")}</Th>
+                <Th onClick={() => toggleSort("name")}>Name{arrow("name")}</Th>
+                <Th className="hidden md:table-cell">Mobile</Th>
+                <Th className="hidden lg:table-cell">Address</Th>
+                <Th className="text-right" onClick={() => toggleSort("balance")}>Balance{arrow("balance")}</Th>
+                <Th className="text-right">Action</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(({ c, bal }) => (
+                <tr key={c.id} className="transition hover:bg-blue-50/40">
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-slate-500">{c.consumerNo}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => onOpen(c.id)} className="truncate text-left font-medium text-slate-800 hover:text-blue-700 hover:underline">
+                        {c.name}
+                      </button>
+                      {c.status === "disconnected" && <Pill variant="flat">DC</Pill>}
+                    </div>
+                  </td>
+                  <td className="hidden whitespace-nowrap px-3 py-2.5 text-slate-600 md:table-cell">{c.phone || "—"}</td>
+                  <td className="hidden max-w-[22rem] truncate px-3 py-2.5 text-slate-500 lg:table-cell">{c.address}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">
+                    <span className={bal > 0 ? "text-rose-600" : bal < 0 ? "text-sky-600" : "text-slate-300"}>
+                      {bal === 0 ? "—" : money(bal)}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                    <Button variant={bal > 0 ? "gold" : "ghost"} className="!px-3 !py-1.5 text-xs" disabled={bal <= 0} onClick={() => onPay(c)}>
+                      Pay
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr><td colSpan={6} className="p-8 text-center text-sm text-slate-400">No consumers match "{q}".</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        <div className="divide-y divide-slate-100">
-          {filtered.map((c) => {
-            const bal = balanceOf(c, txns);
-            return (
-              <div key={c.id} className="flex items-center gap-3 p-3 transition hover:bg-slate-50">
-                <Avatar name={c.name} />
-                <button className="min-w-0 flex-1 text-left" onClick={() => onOpen(c.id)}>
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-semibold">{c.name}</span>
-                    {!c.metered && <Pill variant="flat">flat</Pill>}
-                  </div>
-                  <div className="truncate text-xs text-slate-500">{c.consumerNo} · {c.meterNo} · {c.address}</div>
-                </button>
-                <div className="hidden sm:block"><BalancePill amount={bal} /></div>
-                <Button variant={bal > 0 ? "gold" : "ghost"} className="!px-3 !py-1.5 text-xs" disabled={bal <= 0} onClick={() => onPay(c)}>
-                  Pay
-                </Button>
-              </div>
-            );
-          })}
-          {filtered.length === 0 && <div className="p-6 text-center text-sm text-slate-400">No consumers match "{q}".</div>}
+        <div className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
+          Showing {rows.length} of {consumers.length}
         </div>
       </Card>
     </div>
   );
 }
 
-function Stat({ label, value, tone, sub, onClick, active }) {
-  const tones = { rose: "text-rose-600", sky: "text-sky-600", blue: "text-blue-700", slate: "text-slate-800" };
+function Th({ children, className = "", onClick }) {
   return (
-    <Card className={`p-4 ${active ? "ring-2 ring-blue-500" : ""}`} onClick={onClick}>
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${tones[tone]}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-slate-400">{sub}</div>}
+    <th
+      onClick={onClick}
+      className={`px-3 py-2.5 text-left font-semibold ${onClick ? "cursor-pointer select-none hover:text-slate-700" : ""} ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Stat({ label, value, tone, sub, onClick, active }) {
+  const tones = {
+    rose: { text: "text-rose-600", bar: "bg-rose-500" },
+    sky: { text: "text-sky-600", bar: "bg-sky-500" },
+    blue: { text: "text-blue-700", bar: "bg-blue-600" },
+    slate: { text: "text-slate-800", bar: "bg-slate-400" },
+  };
+  const t = tones[tone] || tones.slate;
+  return (
+    <Card className={`relative overflow-hidden p-4 ${active ? "ring-2 ring-blue-500" : ""}`} onClick={onClick}>
+      <span className={`absolute inset-y-0 left-0 w-1 ${t.bar}`} />
+      <div className="pl-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+        <div className={`mt-1 text-2xl font-bold tracking-tight ${t.text}`}>{value}</div>
+        {sub && <div className="mt-0.5 text-xs text-slate-400">{sub}</div>}
+      </div>
     </Card>
   );
 }
@@ -387,8 +457,10 @@ function Settings({ tariff, setTariff, onAddConsumer }) {
       <AddConnection onAddConsumer={onAddConsumer} />
 
       <div>
-        <h2 className="text-lg font-bold">Tariff Settings</h2>
-        <p className="text-sm text-slate-500">Example values — edit any time (e.g. after the 12th). No coding needed.</p>
+        <h2 className="text-lg font-bold">Tariff & Charges</h2>
+        <p className="text-sm text-slate-500">
+          These are the rates used to calculate every bill. Change them here any time — the next bill uses the new values immediately.
+        </p>
       </div>
 
       <Card className="p-4">
