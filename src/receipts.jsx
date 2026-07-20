@@ -65,19 +65,21 @@ export function BillReceipt({ data }) {
       {consumer.address && <div className="text-[10px] leading-tight">{consumer.address}</div>}
       {consumer.phone && <L l="Mobile" r={consumer.phone} />}
       <L l="Meter" r={consumer.meterNo} />
-
-      {/* blank band reserved for RawBT's advert — keeps it off the readings */}
-      <WatermarkGap />
-
       <Dashed />
       {charge.disconnected ? (
         <L l="Connection" r="Disconnected" />
       ) : charge.metered ? (
         <>
-          <L l="Prev reading" r={charge.prevReading} />
-          {prevReadingDate && prevReadingDate !== "—" && <L l="  on" r={prevReadingDate} />}
-          <L l="Curr reading" r={charge.currentReading} />
-          <L l="  on" r={currReadingDate} />
+          {/* reading and its date on ONE line, so the advert can't split them */}
+          <L
+            l="Prev reading"
+            r={`${charge.prevReading}${prevReadingDate && prevReadingDate !== "—" ? " · " + prevReadingDate : ""}`}
+          />
+
+          {/* blank band reserved for RawBT's advert — it lands right here */}
+          <WatermarkGap />
+
+          <L l="Curr reading" r={`${charge.currentReading} · ${currReadingDate}`} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
           <L l="Consumption" r={`${charge.consumption.toLocaleString("en-IN")} L`} />
         </>
