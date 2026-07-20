@@ -17,14 +17,9 @@ function Dashed() {
   return <div className="my-1 border-t border-dashed border-slate-400" />;
 }
 
-// RawBT's free version stamps its advert into the print at a fixed distance
-// from the top. We leave a deliberate blank band there so it lands in empty
-// space instead of cutting through the readings.
-// Tune this if the advert still overlaps: bigger = taller gap.
-const WATERMARK_GAP_MM = 22;
-
-function WatermarkGap() {
-  return <div aria-hidden="true" style={{ height: `${WATERMARK_GAP_MM}mm` }} />;
+// Keep dates short so a line never wraps on 58mm paper: "21 Jul 2026" -> "21 Jul 26"
+function shortDate(d) {
+  return String(d || "").replace(/\s(\d{2})(\d{2})$/, " $2");
 }
 
 function Head({ title }) {
@@ -70,18 +65,14 @@ export function BillReceipt({ data }) {
         <L l="Connection" r="Disconnected" />
       ) : charge.metered ? (
         <>
-          {/* reading and its date on ONE line, so the advert can't split them */}
+          {/* short labels + short dates so nothing wraps on 58mm paper */}
           <L
-            l="Prev reading"
-            r={`${charge.prevReading}${prevReadingDate && prevReadingDate !== "—" ? " · " + prevReadingDate : ""}`}
+            l="Prev"
+            r={`${charge.prevReading}${prevReadingDate && prevReadingDate !== "—" ? "  " + shortDate(prevReadingDate) : ""}`}
           />
-
-          {/* blank band reserved for RawBT's advert — it lands right here */}
-          <WatermarkGap />
-
-          <L l="Curr reading" r={`${charge.currentReading} · ${currReadingDate}`} />
+          <L l="Curr" r={`${charge.currentReading}  ${shortDate(currReadingDate)}`} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
-          <L l="Consumption" r={`${charge.consumption.toLocaleString("en-IN")} L`} />
+          <L l="Used" r={`${charge.consumption.toLocaleString("en-IN")} L`} />
         </>
       ) : (
         <L l="Connection" r="Flat-rate (no meter)" />
@@ -133,10 +124,6 @@ export function PaymentReceipt({ data }) {
       <L l="Con. No" r={consumer.consumerNo} />
       {spotBillNo && <L l="Spot Bill No" r={spotBillNo} />}
       <L l="From" r={payerName || consumer.name} />
-
-      {/* blank band reserved for RawBT's advert */}
-      <WatermarkGap />
-
       <Dashed />
       <L l="Received Rs" r={money(amount)} bold />
       <L l="Mode" r={mode} />
