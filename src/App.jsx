@@ -265,42 +265,50 @@ function TopBar({ role, setRole, email, userRole }) {
   const { lang, setLang, t } = useLang();
   return (
     <header className="animate-gradient relative overflow-hidden bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 text-white shadow-lg">
-      <div className="relative z-10 mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
-            <WaterDrop className="h-6 w-6 text-white" />
+      <div className="relative z-10 mx-auto flex max-w-5xl flex-col gap-3 px-4 pb-6 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:pb-7 sm:pt-4">
+        {/* brand — single line, never wraps */}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur sm:h-10 sm:w-10">
+            <WaterDrop className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-base font-bold leading-tight sm:text-lg">{scheme.name}</h1>
-            <p className="text-xs text-blue-100">{scheme.malayalamName} · {t("billingSystem")}</p>
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-bold leading-tight sm:text-base">{scheme.name}</h1>
+            <p className="truncate text-[11px] leading-tight text-blue-100">
+              {scheme.malayalamName}
+              <span className="hidden sm:inline"> · {t("billingSystem")}</span>
+            </p>
           </div>
         </div>
+
+        {/* controls — own row on mobile, inline on desktop */}
         <div className="flex items-center gap-2">
           {userRole === "admin" ? (
-            <div className="flex rounded-xl bg-black/15 p-1 text-xs font-semibold ring-1 ring-white/15">
+            <div className="flex flex-1 rounded-xl bg-black/15 p-1 text-xs font-semibold ring-1 ring-white/15 sm:flex-none">
               {["reader", "admin"].map((r) => (
                 <button
                   key={r}
                   onClick={() => setRole(r)}
-                  className={`rounded-lg px-3 py-1.5 transition ${role === r ? "bg-white text-blue-800 shadow" : "text-blue-50 hover:bg-white/10"}`}
+                  className={`flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 transition sm:flex-none ${role === r ? "bg-white text-blue-800 shadow" : "text-blue-50 hover:bg-white/10"}`}
                 >
                   {r === "reader" ? "Meter Reader" : "Admin"}
                 </button>
               ))}
             </div>
           ) : (
-            <span className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/15">Meter Reader</span>
+            <span className="flex-1 rounded-lg bg-white/15 px-3 py-1.5 text-center text-xs font-semibold ring-1 ring-white/15 sm:flex-none">
+              Meter Reader
+            </span>
           )}
           <button
             onClick={() => setLang(lang === "en" ? "ml" : "en")}
-            className="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-bold ring-1 ring-white/15 hover:bg-white/25"
+            className="shrink-0 rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-bold ring-1 ring-white/15 hover:bg-white/25"
           >
             {lang === "en" ? "മല" : "EN"}
           </button>
           <button
             onClick={() => supabase.auth.signOut()}
             title={email ? `Sign out (${email})` : "Sign out"}
-            className="rounded-xl bg-black/15 p-2 ring-1 ring-white/15 hover:bg-black/25"
+            className="shrink-0 rounded-lg bg-black/15 p-2 ring-1 ring-white/15 hover:bg-black/25"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
@@ -362,13 +370,16 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const areaList = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]);
 
   const s = q.trim().toLowerCase();
-  const list = consumers.filter((c) => {
-    if (area !== "all" && areaOf(c) !== area) return false;
-    if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
-    if (filter === "pending") return !isDone(c);
-    if (filter === "done") return isDone(c);
-    return true;
-  });
+  const list = consumers
+    .filter((c) => {
+      if (area !== "all" && areaOf(c) !== area) return false;
+      if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
+      if (filter === "pending") return !isDone(c);
+      if (filter === "done") return isDone(c);
+      return true;
+    })
+    // 1, 2, 3 … not 1, 10, 100 (consumer numbers are text in the database)
+    .sort((a, b) => Number(shortNo(a)) - Number(shortNo(b)));
 
   const chips = [
     { key: "pending", label: `${tr("pending")} (${total - doneCount})` },
