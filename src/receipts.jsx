@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { scheme, money, upiUri, amountInWords } from "./billing";
 import { Button, Modal } from "./ui";
+import { useLang } from "./i18n";
 
 function L({ l, r, bold }) {
   return (
@@ -146,7 +147,8 @@ export function PaymentReceipt({ data }) {
   );
 }
 
-export function ReceiptModal({ receipt, onClose }) {
+export function ReceiptModal({ receipt, onClose, onPay }) {
+  const { t } = useLang();
   const isBill = receipt.kind === "bill";
 
   // While a receipt is open, print on a 58mm continuous roll (no page splitting).
@@ -174,6 +176,11 @@ export function ReceiptModal({ receipt, onClose }) {
         <Button variant="ghost" className="flex-1" onClick={onClose}>Close</Button>
         <Button className="flex-1" onClick={() => window.print()}>🖨 Print</Button>
       </div>
+      {isBill && onPay && (
+        <Button variant="gold" className="mt-2 w-full" onClick={() => onPay(receipt.data.consumer)}>
+          💵 {t("recordPayment")}
+        </Button>
+      )}
       <p className="mt-2 text-center text-xs text-slate-400">
         On the reader's phone, Print sends this to the Bluetooth printer via RawBT.
       </p>

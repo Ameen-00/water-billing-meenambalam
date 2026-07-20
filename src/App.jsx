@@ -179,7 +179,13 @@ function AppInner() {
             onConfirm={(payload) => { recordPayment(paying, payload); setPaying(null); }}
           />
         )}
-        {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
+          {receipt && (
+          <ReceiptModal
+            receipt={receipt}
+            onClose={() => setReceipt(null)}
+            onPay={(consumer) => { setReceipt(null); setPaying(consumer); }}
+          />
+        )}
       </div>
     );
 
