@@ -52,6 +52,8 @@ export function BillReceipt({ data }) {
       <L l="Date" r={date} />
       <L l="Con. No" r={consumer.consumerNo} />
       <L l="Name" r={consumer.name} />
+      {consumer.address && <div className="text-[10px] leading-tight">{consumer.address}</div>}
+      {consumer.phone && <L l="Mobile" r={consumer.phone} />}
       <L l="Meter" r={consumer.meterNo} />
       <Dashed />
       {charge.disconnected ? (
@@ -61,6 +63,7 @@ export function BillReceipt({ data }) {
           <L l="Prev reading" r={charge.prevReading} />
           {prevReadingDate && prevReadingDate !== "—" && <L l="  on" r={prevReadingDate} />}
           <L l="Curr reading" r={charge.currentReading} />
+          <L l="  on" r={currReadingDate} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
           <L l="Consumption" r={`${charge.consumption.toLocaleString("en-IN")} L`} />
         </>
@@ -74,8 +77,9 @@ export function BillReceipt({ data }) {
           {p.detail && <div className="pl-1 text-[10px]">{p.detail}</div>}
         </div>
       ))}
-      {charge.parts.length > 1 && <L l="Water charge" r={money(charge.waterCharge)} />}
+      <L l="Water charge" r={money(charge.waterCharge)} />
       <L l="Meter fee" r={money(charge.meterFee)} />
+      {charge.season && <L l="Season" r={charge.season} />}
       <Dashed />
       <L l="This bill" r={money(charge.currentCharge)} bold />
       <L l="Arrears" r={money(arrears)} />
