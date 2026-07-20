@@ -6,7 +6,7 @@ import { useLang } from "./i18n";
 
 function L({ l, r, bold }) {
   return (
-    <div className={`flex justify-between gap-2 ${bold ? "text-[13px] font-bold" : ""}`}>
+    <div className={`flex justify-between gap-2 ${bold ? "text-[14px] font-bold" : ""}`}>
       <span className="text-left">{l}</span>
       <span className="text-right">{r}</span>
     </div>
@@ -20,11 +20,11 @@ function Dashed() {
 function Head({ title }) {
   return (
     <div className="text-center">
-      <div className="text-[11px] font-bold leading-tight">{scheme.malayalamName}</div>
-      <div className="text-[12px] font-bold leading-tight">{scheme.name}</div>
-      <div className="text-[9px]">{scheme.subtitle}</div>
-      <div className="text-[9px]">Ph: {scheme.phone}</div>
-      <div className="mt-1 inline-block rounded bg-black px-2 text-[11px] font-bold tracking-wider text-white">{title}</div>
+      <div className="text-[13px] font-bold leading-tight">{scheme.malayalamName}</div>
+      <div className="text-[13px] font-bold leading-tight">{scheme.name}</div>
+      <div className="text-[10px]">{scheme.subtitle}</div>
+      <div className="text-[10px]">Ph: {scheme.phone}</div>
+      <div className="mt-1 inline-block rounded bg-black px-2 text-[12px] font-bold tracking-wider text-white">{title}</div>
     </div>
   );
 }
@@ -33,7 +33,7 @@ function Paper({ children }) {
   return (
     <div
       id="receipt-print"
-      className="mx-auto bg-white p-3 font-mono text-[11px] leading-tight text-black shadow-inner ring-1 ring-slate-200"
+      className="mx-auto bg-white p-3 font-mono text-[12px] font-medium leading-snug text-black shadow-inner ring-1 ring-slate-200"
       style={{ width: "58mm" }}
     >
       {children}
@@ -71,7 +71,7 @@ export function BillReceipt({ data }) {
       {charge.parts.map((p, i) => (
         <div key={i}>
           <L l={p.label} r={money(p.amount)} />
-          {p.detail && <div className="pl-1 text-[9px]">{p.detail}</div>}
+          {p.detail && <div className="pl-1 text-[10px]">{p.detail}</div>}
         </div>
       ))}
       {charge.parts.length > 1 && <L l="Water charge" r={money(charge.waterCharge)} />}
@@ -81,20 +81,20 @@ export function BillReceipt({ data }) {
       <L l="Arrears" r={money(arrears)} />
       <Dashed />
       <L l="TOTAL PAYABLE" r={money(totalDue)} bold />
-      <div className="mt-1 text-[9px] italic">({amountInWords(totalDue)})</div>
+      <div className="mt-1 text-[10px] italic">({amountInWords(totalDue)})</div>
       <Dashed />
-      <div className="text-[9px]">
+      <div className="text-[10px]">
         <div>Pay by {dueNoFine} — no fine</div>
         <div>Pay by {dueWithFine} — with fine</div>
       </div>
       <Dashed />
       <div className="flex flex-col items-center gap-0.5 py-0.5">
         <QRCodeSVG value={qr} size={84} level="M" />
-        <div className="text-center text-[9px] font-semibold">Scan to pay · UPI · {scheme.upi.vpa}</div>
+        <div className="text-center text-[10px] font-semibold">Scan to pay · UPI · {scheme.upi.vpa}</div>
       </div>
       <Dashed />
-      {readerName && <div className="text-[9px]">Reader: {readerName}</div>}
-      <div className="mt-1 text-[9px]">Signature: ____________</div>
+      {readerName && <div className="text-[10px]">Reader: {readerName}</div>}
+      <div className="mt-1 text-[10px]">Signature: ____________</div>
       <div className="text-center text-[10px]">Thank you!</div>
     </Paper>
   );
@@ -124,19 +124,19 @@ export function PaymentReceipt({ data }) {
       {lastCharge && (
         <>
           <Dashed />
-          <div className="text-[9px] font-bold">Bill charges (ref)</div>
+          <div className="text-[10px] font-bold">Bill charges (ref)</div>
           <L l="Water charge" r={money(lastCharge.waterCharge)} />
           <L l="Meter fee" r={money(lastCharge.meterFee)} />
           <L l="Total" r={money(lastCharge.currentCharge)} bold />
         </>
       )}
-      <div className="mt-1 text-[9px] italic">({amountInWords(amount)} received)</div>
+      <div className="mt-1 text-[10px] italic">({amountInWords(amount)} received)</div>
       <Dashed />
       <div className="text-center text-[11px] font-bold tracking-wider">✓ PAID</div>
       {remaining > 0 && (
         <div className="mt-1 flex flex-col items-center gap-1">
           <QRCodeSVG value={upiUri({ amount: remaining, note: `${consumer.consumerNo} balance` })} size={92} level="M" />
-          <div className="text-[9px]">Scan to pay balance</div>
+          <div className="text-[10px]">Scan to pay balance</div>
         </div>
       )}
       <Dashed />
