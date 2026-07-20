@@ -46,7 +46,7 @@
   /* Thermal roll: fill the paper width and print as one continuous strip.
      Scoped to .printing-receipt so A4 report printing is unaffected. */
   body.printing-receipt {
-    width: 58mm;
+    width: 48mm;
     margin: 0 !important;
     padding: 0 !important;
     background: #fff;
@@ -55,7 +55,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 58mm !important;
+    width: 48mm !important;
     margin: 0;
     padding: 2mm 1.5mm;
     box-shadow: none !important;
@@ -67,7 +67,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 58mm;
+    width: 48mm;
   }
   #print-report {
     position: absolute;

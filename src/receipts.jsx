@@ -17,7 +17,7 @@ function Dashed() {
   return <div className="my-1 border-t border-dashed border-slate-400" />;
 }
 
-// Keep dates short so a line never wraps on 58mm paper: "21 Jul 2026" -> "21 Jul 26"
+// Keep dates short so a line never wraps on 48mm paper: "21 Jul 2026" -> "21 Jul 26"
 function shortDate(d) {
   return String(d || "").replace(/\s(\d{2})(\d{2})$/, " $2");
 }
@@ -39,7 +39,7 @@ function Paper({ children }) {
     <div
       id="receipt-print"
       className="mx-auto bg-white p-3 font-mono text-[12px] font-medium leading-snug text-black shadow-inner ring-1 ring-slate-200"
-      style={{ width: "58mm" }}
+      style={{ width: "48mm" }}
     >
       {children}
     </div>
@@ -65,7 +65,7 @@ export function BillReceipt({ data }) {
         <L l="Connection" r="Disconnected" />
       ) : charge.metered ? (
         <>
-          {/* short labels + short dates so nothing wraps on 58mm paper */}
+          {/* short labels + short dates so nothing wraps on 48mm paper */}
           <L
             l="Prev"
             r={`${charge.prevReading}${prevReadingDate && prevReadingDate !== "—" ? "  " + shortDate(prevReadingDate) : ""}`}
@@ -160,12 +160,12 @@ export function ReceiptModal({ receipt, onClose, onPay }) {
   const { t } = useLang();
   const isBill = receipt.kind === "bill";
 
-  // While a receipt is open, print on a 58mm continuous roll (no page splitting).
+  // While a receipt is open, print on a 48mm continuous roll (no page splitting).
   // Removed on close so A4 report printing still works normally.
   useEffect(() => {
     document.body.classList.add("printing-receipt");
     const style = document.createElement("style");
-    style.textContent = "@page { size: 58mm auto; margin: 0; }";
+    style.textContent = "@page { size: 48mm auto; margin: 0; }";
     document.head.appendChild(style);
     return () => {
       document.body.classList.remove("printing-receipt");
