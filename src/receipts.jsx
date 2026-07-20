@@ -14,7 +14,7 @@ function L({ l, r, bold }) {
 }
 
 function Dashed() {
-  return <div className="my-1.5 border-t border-dashed border-slate-400" />;
+  return <div className="my-1 border-t border-dashed border-slate-400" />;
 }
 
 function Head({ title }) {
@@ -59,9 +59,8 @@ export function BillReceipt({ data }) {
       ) : charge.metered ? (
         <>
           <L l="Prev reading" r={charge.prevReading} />
-          <L l="  on" r={prevReadingDate} />
+          {prevReadingDate && prevReadingDate !== "—" && <L l="  on" r={prevReadingDate} />}
           <L l="Curr reading" r={charge.currentReading} />
-          <L l="  on" r={currReadingDate} />
           {charge.meterReset && <L l="" r="(meter reset)" />}
           <L l="Consumption" r={`${charge.consumption.toLocaleString("en-IN")} L`} />
         </>
@@ -75,7 +74,7 @@ export function BillReceipt({ data }) {
           {p.detail && <div className="pl-1 text-[9px]">{p.detail}</div>}
         </div>
       ))}
-      <L l="Water charge" r={money(charge.waterCharge)} />
+      {charge.parts.length > 1 && <L l="Water charge" r={money(charge.waterCharge)} />}
       <L l="Meter fee" r={money(charge.meterFee)} />
       <Dashed />
       <L l="This bill" r={money(charge.currentCharge)} bold />
@@ -89,15 +88,14 @@ export function BillReceipt({ data }) {
         <div>Pay by {dueWithFine} — with fine</div>
       </div>
       <Dashed />
-      <div className="flex flex-col items-center gap-1 py-1">
-        <QRCodeSVG value={qr} size={104} level="M" />
-        <div className="text-center text-[10px] font-semibold">Scan to pay · UPI</div>
-        <div className="text-center text-[9px]">{scheme.upi.vpa}</div>
+      <div className="flex flex-col items-center gap-0.5 py-0.5">
+        <QRCodeSVG value={qr} size={84} level="M" />
+        <div className="text-center text-[9px] font-semibold">Scan to pay · UPI · {scheme.upi.vpa}</div>
       </div>
       <Dashed />
       {readerName && <div className="text-[9px]">Reader: {readerName}</div>}
-      <div className="mt-2 text-[9px]">Reader's signature: ____________</div>
-      <div className="mt-1 text-center text-[10px]">Thank you!</div>
+      <div className="mt-1 text-[9px]">Signature: ____________</div>
+      <div className="text-center text-[10px]">Thank you!</div>
     </Paper>
   );
 }
