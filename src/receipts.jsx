@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { scheme, money, upiUri, amountInWords } from "./billing";
 import { Button, Modal } from "./ui";
@@ -147,6 +148,19 @@ export function PaymentReceipt({ data }) {
 
 export function ReceiptModal({ receipt, onClose }) {
   const isBill = receipt.kind === "bill";
+
+  // While a receipt is open, print on a 58mm continuous roll (no page splitting).
+  // Removed on close so A4 report printing still works normally.
+  useEffect(() => {
+    document.body.classList.add("printing-receipt");
+    const style = document.createElement("style");
+    style.textContent = "@page { size: 58mm auto; margin: 0; }";
+    document.head.appendChild(style);
+    return () => {
+      document.body.classList.remove("printing-receipt");
+      style.remove();
+    };
+  }, []);
   return (
     <Modal
       title={isBill ? "Bill Ready" : "Payment Received"}
