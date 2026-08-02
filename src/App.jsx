@@ -355,7 +355,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const { t: tr } = useLang();
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState("pending"); // pending | all | done
+  const [filter, setFilter] = useState("all"); // all | due | settled | disc
   const [area, setArea] = useState("all");
 
   if (selected) {
@@ -403,20 +403,19 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
     .filter((c) => {
       if (area !== "all" && areaOf(c) !== area) return false;
       if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
-      if (filter === "pending") return !isDone(c);
-      if (filter === "done") return isDone(c);
       if (filter === "due") return hasDue(c);
+      if (filter === "settled") return !hasDue(c);
       if (filter === "disc") return isDisc(c);
-      return true;
+      return true; // all
     })
     // 1, 2, 3 … not 1, 10, 100 (consumer numbers are text in the database)
     .sort((a, b) => Number(shortNo(a)) - Number(shortNo(b)));
 
+  const settledCount = total - dueCount;
   const chips = [
-    { key: "pending", label: `${tr("pending")} (${total - doneCount})` },
     { key: "all", label: `${tr("all")} (${total})` },
-    { key: "done", label: `${tr("billedChip")} (${doneCount})` },
     { key: "due", label: `${tr("dueOnly")} (${dueCount})` },
+    { key: "settled", label: `${tr("settledOnly")} (${settledCount})` },
     { key: "disc", label: `${tr("discOnly")} (${discCount})` },
   ];
 
@@ -452,12 +451,14 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
         <div className="flex flex-wrap gap-1.5">
           {chips.map((ch) => {
             const on = filter === ch.key;
-            const tone = ch.key === "due" ? "amber" : ch.key === "disc" ? "slate" : "blue";
+            const tone = ch.key === "due" ? "amber" : ch.key === "disc" ? "slate" : ch.key === "settled" ? "green" : "blue";
             const cls = on
               ? tone === "amber" ? "bg-amber-500 text-white ring-amber-500"
+                : tone === "green" ? "bg-emerald-600 text-white ring-emerald-600"
                 : tone === "slate" ? "bg-slate-600 text-white ring-slate-600"
                 : "bg-blue-700 text-white ring-blue-700"
               : tone === "amber" ? "bg-amber-50 text-amber-700 ring-amber-200"
+                : tone === "green" ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                 : tone === "slate" ? "bg-slate-100 text-slate-600 ring-slate-300"
                 : "bg-white text-slate-600 ring-slate-200";
             return (
