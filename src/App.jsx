@@ -136,6 +136,16 @@ function AppInner() {
     }
   }
 
+  async function setConsumerStatus(consumer, status) {
+    try {
+      await db.updateConsumerStatus(consumer.id, status);
+      setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, status } : c)));
+      toast.success(status === "disconnected" ? `${consumer.name} disconnected` : `${consumer.name} reactivated`);
+    } catch (e) {
+      toast.error("Could not update status: " + e.message);
+    }
+  }
+
   async function addConsumer(data) {
     try {
       const c = await db.insertConsumer(data);
@@ -165,7 +175,7 @@ function AppInner() {
 
         <main key={role} className="animate-fade-in mx-auto max-w-5xl px-4 pb-24 pt-5">
           {userRole === "admin" && role === "admin" ? (
-            <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} />
+            <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} />
           ) : (
             <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} />
           )}

@@ -5,14 +5,14 @@ import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui
 // ===========================================================================
 // AdminArea — tab shell for Dashboard / Reports / Settings, plus consumer detail
 // ===========================================================================
-export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer }) {
+export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus }) {
   const [tab, setTab] = useState("dashboard");
   const [detailId, setDetailId] = useState(null);
 
   if (detailId) {
     const consumer = consumers.find((c) => c.id === detailId);
     return (
-      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} />
+      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} />
     );
   }
 
@@ -219,7 +219,8 @@ function Stat({ label, value, tone, sub, onClick, active }) {
 // ===========================================================================
 // CONSUMER DETAIL — full ledger / history
 // ===========================================================================
-function ConsumerDetail({ consumer, tariff, txns, onBack, onPay }) {
+function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus }) {
+  const isDisc = consumer.status === "disconnected";
   const rows = useMemo(() => {
     const list = txns.filter((t) => t.consumerId === consumer.id);
     let bal = consumer.openingArrears;
@@ -243,8 +244,7 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold">{consumer.name}</h2>
-              {!consumer.metered && <Pill variant="flat">flat-rate</Pill>}
-              <Pill variant="info">{categoryLabel(consumer.category)}</Pill>
+              {isDisc ? <Pill variant="flat">Disconnected</Pill> : <Pill variant="credit">Active</Pill>}
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
               <Info label="Consumer No" value={consumer.consumerNo} strong />
@@ -271,6 +271,31 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay }) {
         <div className="divide-y divide-slate-100">
           {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} />)}
         </div>
+      </Card>
+
+      {/* Admin: connect / disconnect */}
+      <Card className="flex items-center justify-between p-4">
+        <div>
+          <div className="text-sm font-semibold text-slate-700">Connection status</div>
+          <div className="text-xs text-slate-500">
+            {isDisc ? "This consumer is disconnected (not billed on meter)." : "This consumer is active."}
+          </div>
+        </div>
+        {isDisc ? (
+          <Button
+            variant="primary"
+            onClick={() => { if (confirm(`Reactivate ${consumer.name}? They will be billed normally again.`)) onSetStatus(consumer, "active"); }}
+          >
+            Reactivate
+          </Button>
+        ) : (
+          <Button
+            variant="danger"
+            onClick={() => { if (confirm(`Disconnect ${consumer.name}? They will get the fixed disconnected charge.`)) onSetStatus(consumer, "disconnected"); }}
+          >
+            Disconnect
+          </Button>
+        )}
       </Card>
     </div>
   );

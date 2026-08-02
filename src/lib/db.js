@@ -56,6 +56,11 @@ export async function updatePrevReading(consumerId, prevReading) {
   if (error) throw error;
 }
 
+export async function updateConsumerStatus(consumerId, status) {
+  const { error } = await supabase.from("consumers").update({ status }).eq("id", consumerId);
+  if (error) throw error;
+}
+
 export async function saveTariffToDb(tariff) {
   const { error } = await supabase
     .from("settings")

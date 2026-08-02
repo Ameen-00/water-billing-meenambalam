@@ -27,7 +27,7 @@ export const scheme = {
 export const initialTariff = {
   // Flat slabs covering the first 15,000 litres
   slabs: [
-    { upTo: 7000, amount: 75 },
+    { upTo: 7000, amount: 70 },
     { upTo: 10000, amount: 100 },
     { upTo: 12500, amount: 125 },
     { upTo: 15000, amount: 150 },
