@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -80,9 +80,17 @@ function AppInner() {
       const meta = { billNo, charge };
       const txn = await db.insertTransaction({ consumerId: consumer.id, type: "bill", amount: charge.currentCharge, date: today(), meta });
       setTxns((p) => [...p, txn]);
-      if (charge.metered) {
-        await db.updatePrevReading(consumer.id, charge.currentReading);
-        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: charge.currentReading } : c)));
+      // Advance the meter baseline:
+      //  - owner away  -> add the assumed litres (+7,000)
+      //  - normal read -> move to the new reading, but never DOWN (keeps pre-paid credit)
+      if (charge.absent) {
+        const newPrev = consumer.prevReading + (charge.assumedAdvance || 0);
+        await db.updatePrevReading(consumer.id, newPrev);
+        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
+      } else if (charge.metered && charge.currentReading != null) {
+        const newPrev = Math.max(consumer.prevReading, charge.currentReading);
+        await db.updatePrevReading(consumer.id, newPrev);
+        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
       }
       setSeq((s) => ({ ...s, bill: s.bill + 1 }));
       setReceipt({
@@ -506,8 +514,9 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const totalDue = arrears + charge.currentCharge;
 
   const isDisc = consumer.status === "disconnected";
+  // A reading below the previous baseline is allowed — it just bills the minimum.
   const readingLow = !isDisc && consumer.metered && !reset && reading !== "" && Number(reading) < consumer.prevReading;
-  const canSave = isDisc || !consumer.metered || (reading !== "" && !readingLow);
+  const canSave = isDisc || !consumer.metered || reading !== "";
 
   const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
 
@@ -631,14 +640,22 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
               />
             </Field>
             {readingLow && (
-              <p className="text-xs text-rose-600">
-                {tr("readingLow")} ({consumer.prevReading}).
-              </p>
+              <p className="text-xs text-amber-700">{tr("readingLowMin")}</p>
             )}
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={reset} onChange={(e) => setReset(e.target.checked)} className="h-4 w-4 rounded" />
               {tr("meterReset")}
             </label>
+
+            <div className="border-t border-dashed border-slate-200 pt-3">
+              <button
+                type="button"
+                onClick={() => onGenerate(minimumCharge(tariff))}
+                className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+              >
+                {tr("ownerNotHome")}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">

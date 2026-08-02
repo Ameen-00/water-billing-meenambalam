@@ -63,6 +63,11 @@ export function BillReceipt({ data }) {
       <Dashed />
       {charge.disconnected ? (
         <L l="Connection" r="Disconnected" />
+      ) : charge.absent ? (
+        <>
+          <L l="Reading" r="not taken" />
+          <div className="text-[10px]">Owner not home — minimum charge</div>
+        </>
       ) : charge.metered ? (
         <>
           {/* short labels + short dates so nothing wraps on 48mm paper */}

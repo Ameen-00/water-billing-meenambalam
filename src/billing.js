@@ -153,6 +153,22 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
   };
 }
 
+// "Owner not home" — charge the monthly minimum without a reading, and remember
+// how much to advance the meter baseline (the first slab's litres).
+export function minimumCharge(tariff) {
+  const t = { ...initialTariff, ...(tariff || {}) };
+  const slab0 = (t.slabs && t.slabs[0]) || initialTariff.slabs[0];
+  const water = Number(slab0.amount);
+  const assumed = Number(slab0.upTo);
+  const meterFee = Number(t.meterFee ?? 5);
+  return {
+    metered: true, disconnected: false, absent: true, assumedAdvance: assumed, meterReset: false,
+    prevReading: null, currentReading: null, consumption: assumed,
+    parts: [{ label: "Owner not home (min)", detail: `up to ${assumed.toLocaleString("en-IN")} L assumed`, amount: water }],
+    waterCharge: water, meterFee, currentCharge: Math.round(water + meterFee), season: null,
+  };
+}
+
 export function upiUri({ amount, note } = {}) {
   const { vpa, payeeName } = scheme.upi;
   const p = new URLSearchParams({ pa: vpa, pn: payeeName, cu: "INR" });
