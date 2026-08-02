@@ -377,6 +377,8 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const isDone = (c) =>
     txns.some((t) => t.type === "bill" && t.consumerId === c.id && (t.createdAt || "").slice(0, 7) === monthKey);
   const doneCount = consumers.filter(isDone).length;
+  const hasDue = (c) => balanceOf(c, txns) > 0;
+  const dueCount = consumers.filter(hasDue).length;
   const total = consumers.length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
@@ -400,6 +402,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
       if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
       if (filter === "pending") return !isDone(c);
       if (filter === "done") return isDone(c);
+      if (filter === "due") return hasDue(c);
       return true;
     })
     // 1, 2, 3 … not 1, 10, 100 (consumer numbers are text in the database)
@@ -409,6 +412,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
     { key: "pending", label: `${tr("pending")} (${total - doneCount})` },
     { key: "all", label: `${tr("all")} (${total})` },
     { key: "done", label: `${tr("billedChip")} (${doneCount})` },
+    { key: "due", label: `${tr("dueOnly")} (${dueCount})` },
   ];
 
   return (
@@ -440,16 +444,23 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
           )}
         </div>
 
-        <div className="flex gap-2">
-          {chips.map((ch) => (
-            <button
-              key={ch.key}
-              onClick={() => setFilter(ch.key)}
-              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ring-1 transition ${filter === ch.key ? "bg-blue-700 text-white ring-blue-700" : "bg-white text-slate-600 ring-slate-200"}`}
-            >
-              {ch.label}
-            </button>
-          ))}
+        <div className="flex gap-1.5">
+          {chips.map((ch) => {
+            const on = filter === ch.key;
+            const due = ch.key === "due";
+            const cls = on
+              ? due ? "bg-amber-500 text-white ring-amber-500" : "bg-blue-700 text-white ring-blue-700"
+              : due ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-white text-slate-600 ring-slate-200";
+            return (
+              <button
+                key={ch.key}
+                onClick={() => setFilter(ch.key)}
+                className={`flex-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold ring-1 transition ${cls}`}
+              >
+                {ch.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* area chips — the big win for a long list */}
