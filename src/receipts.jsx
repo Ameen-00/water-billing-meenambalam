@@ -47,7 +47,8 @@ function Paper({ children }) {
 }
 
 export function BillReceipt({ data }) {
-  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName, currReadingDate, prevReadingDate } = data;
+  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName, currReadingDate, prevReadingDate, arrearsInfo } = data;
+  const arrLabel = { water: "Water", meter: "Meter", other: "Other", fine: "Fine" };
   const qr = upiUri({ amount: totalDue, note: `${consumer.consumerNo} ${billNo}` });
   return (
     <Paper>
@@ -95,6 +96,12 @@ export function BillReceipt({ data }) {
       <Dashed />
       <L l="This bill" r={money(charge.currentCharge)} bold />
       <L l="Arrears" r={money(arrears)} />
+      {arrearsInfo && arrearsInfo.rows.map((r) => (
+        <div key={r.key} className="flex justify-between pl-2 text-[10px]">
+          <span>· {arrLabel[r.key]}{r.key === "other" && arrearsInfo.reason ? ` (${arrearsInfo.reason})` : ""}</span>
+          <span>{money(r.amount)}</span>
+        </div>
+      ))}
       <Dashed />
       <L l="TOTAL PAYABLE" r={money(totalDue)} bold />
       <div className="mt-1 text-[10px] italic">({amountInWords(totalDue)})</div>

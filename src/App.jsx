@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -97,6 +97,7 @@ function AppInner() {
         kind: "bill",
         data: {
           consumer, charge, billNo, arrears, totalDue, date: today(),
+          arrearsInfo: arrearsBreakdown(consumer, arrears),
           currReadingDate: today(),
           prevReadingDate: lastBill?.date || "—",
           dueNoFine: addDays(tariff.dueDaysNoFine ?? 15),
@@ -531,6 +532,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const [reset, setReset] = useState(false);
   const charge = calculateCharge(consumer, reading, tariff, reset);
   const totalDue = arrears + charge.currentCharge;
+  const arrInfo = arrearsBreakdown(consumer, arrears);
 
   const isDisc = consumer.status === "disconnected";
   // A reading below the previous baseline is allowed — it just bills the minimum.
@@ -702,6 +704,16 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         <div className="my-2 border-t border-dashed border-slate-200" />
         <Line l={tr("thisBill")} v={money(charge.currentCharge)} />
         <Line l={tr("prevArrears")} v={money(arrears)} />
+        {arrInfo && (
+          <div className="mb-1 rounded-lg bg-slate-50 px-3 py-1.5">
+            {arrInfo.rows.map((r) => (
+              <div key={r.key} className="flex items-center justify-between py-0.5 text-xs text-slate-500">
+                <span>{r.key === "other" && arrInfo.reason ? `${tr("arr_" + r.key)} — ${arrInfo.reason}` : tr("arr_" + r.key)}</span>
+                <span className="font-medium text-slate-600">{money(r.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="my-2 border-t border-dashed border-slate-200" />
         <Line l={tr("totalPayable")} v={money(totalDue)} bold />
       </Card>

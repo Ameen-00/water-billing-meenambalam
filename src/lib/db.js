@@ -5,7 +5,7 @@ const consumerFromRow = (r) => ({
   id: r.id, consumerNo: r.consumer_no, name: r.name, meterNo: r.meter_no,
   address: r.address, category: r.category, metered: r.metered,
   prevReading: Number(r.prev_reading), openingArrears: Number(r.opening_arrears),
-  phone: r.phone, status: r.status,
+  phone: r.phone, status: r.status, dueMeta: r.due_meta || null,
 });
 const txnFromRow = (r) => ({
   id: r.id, consumerId: r.consumer_id, type: r.type,

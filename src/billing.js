@@ -169,6 +169,24 @@ export function minimumCharge(tariff) {
   };
 }
 
+// Break the "previous arrears" into the split we loaded from the register
+// (water / meter / other / fine). We only trust the split while the balance
+// still equals the original opening dues — once a bill or payment moves the
+// balance, the old split no longer maps to it, so we hide it.
+export function arrearsBreakdown(consumer, arrears) {
+  const m = consumer && consumer.dueMeta;
+  if (!m) return null;
+  if (Math.round(Number(arrears)) !== Math.round(Number(consumer.openingArrears || 0))) return null;
+  const rows = [
+    { key: "water", amount: Number(m.water) || 0 },
+    { key: "meter", amount: Number(m.meter) || 0 },
+    { key: "other", amount: Number(m.other) || 0 },
+    { key: "fine", amount: Number(m.fine) || 0 },
+  ].filter((r) => r.amount > 0);
+  if (!rows.length) return null;
+  return { rows, reason: (m.reason || "").trim(), period: (m.period || "").trim() };
+}
+
 export function upiUri({ amount, note } = {}) {
   const { vpa, payeeName } = scheme.upi;
   const p = new URLSearchParams({ pa: vpa, pn: payeeName, cu: "INR" });
