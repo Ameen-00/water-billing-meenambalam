@@ -379,6 +379,8 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const doneCount = consumers.filter(isDone).length;
   const hasDue = (c) => balanceOf(c, txns) > 0;
   const dueCount = consumers.filter(hasDue).length;
+  const isDisc = (c) => c.status === "disconnected";
+  const discCount = consumers.filter(isDisc).length;
   const total = consumers.length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
@@ -403,6 +405,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
       if (filter === "pending") return !isDone(c);
       if (filter === "done") return isDone(c);
       if (filter === "due") return hasDue(c);
+      if (filter === "disc") return isDisc(c);
       return true;
     })
     // 1, 2, 3 … not 1, 10, 100 (consumer numbers are text in the database)
@@ -413,6 +416,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
     { key: "all", label: `${tr("all")} (${total})` },
     { key: "done", label: `${tr("billedChip")} (${doneCount})` },
     { key: "due", label: `${tr("dueOnly")} (${dueCount})` },
+    { key: "disc", label: `${tr("discOnly")} (${discCount})` },
   ];
 
   return (
@@ -444,18 +448,22 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
           )}
         </div>
 
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {chips.map((ch) => {
             const on = filter === ch.key;
-            const due = ch.key === "due";
+            const tone = ch.key === "due" ? "amber" : ch.key === "disc" ? "slate" : "blue";
             const cls = on
-              ? due ? "bg-amber-500 text-white ring-amber-500" : "bg-blue-700 text-white ring-blue-700"
-              : due ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-white text-slate-600 ring-slate-200";
+              ? tone === "amber" ? "bg-amber-500 text-white ring-amber-500"
+                : tone === "slate" ? "bg-slate-600 text-white ring-slate-600"
+                : "bg-blue-700 text-white ring-blue-700"
+              : tone === "amber" ? "bg-amber-50 text-amber-700 ring-amber-200"
+                : tone === "slate" ? "bg-slate-100 text-slate-600 ring-slate-300"
+                : "bg-white text-slate-600 ring-slate-200";
             return (
               <button
                 key={ch.key}
                 onClick={() => setFilter(ch.key)}
-                className={`flex-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold ring-1 transition ${cls}`}
+                className={`flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[11px] font-semibold ring-1 transition ${cls}`}
               >
                 {ch.label}
               </button>
