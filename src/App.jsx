@@ -403,6 +403,8 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
     .filter((c) => {
       if (area !== "all" && areaOf(c) !== area) return false;
       if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
+      if (filter === "tobill") return !isDone(c);
+      if (filter === "done") return isDone(c);
       if (filter === "due") return hasDue(c);
       if (filter === "settled") return !hasDue(c);
       if (filter === "disc") return isDisc(c);
@@ -414,10 +416,21 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   const settledCount = total - dueCount;
   const chips = [
     { key: "all", label: `${tr("all")} (${total})` },
+    { key: "tobill", label: `${tr("toBill")} (${total - doneCount})` },
+    { key: "done", label: `${tr("billedChip")} (${doneCount})` },
     { key: "due", label: `${tr("dueOnly")} (${dueCount})` },
     { key: "settled", label: `${tr("settledOnly")} (${settledCount})` },
     { key: "disc", label: `${tr("discOnly")} (${discCount})` },
   ];
+  const chipTone = { all: "neutral", tobill: "blue", done: "teal", due: "amber", settled: "green", disc: "slate" };
+  const TONE = {
+    neutral: ["bg-slate-800 text-white ring-slate-800", "bg-white text-slate-600 ring-slate-200"],
+    blue: ["bg-blue-700 text-white ring-blue-700", "bg-white text-slate-600 ring-slate-200"],
+    teal: ["bg-teal-600 text-white ring-teal-600", "bg-teal-50 text-teal-700 ring-teal-200"],
+    amber: ["bg-amber-500 text-white ring-amber-500", "bg-amber-50 text-amber-700 ring-amber-200"],
+    green: ["bg-emerald-600 text-white ring-emerald-600", "bg-emerald-50 text-emerald-700 ring-emerald-200"],
+    slate: ["bg-slate-600 text-white ring-slate-600", "bg-slate-100 text-slate-600 ring-slate-300"],
+  };
 
   return (
     <div className="mx-auto max-w-md">
@@ -450,17 +463,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
 
         <div className="flex flex-wrap gap-1.5">
           {chips.map((ch) => {
-            const on = filter === ch.key;
-            const tone = ch.key === "due" ? "amber" : ch.key === "disc" ? "slate" : ch.key === "settled" ? "green" : "blue";
-            const cls = on
-              ? tone === "amber" ? "bg-amber-500 text-white ring-amber-500"
-                : tone === "green" ? "bg-emerald-600 text-white ring-emerald-600"
-                : tone === "slate" ? "bg-slate-600 text-white ring-slate-600"
-                : "bg-blue-700 text-white ring-blue-700"
-              : tone === "amber" ? "bg-amber-50 text-amber-700 ring-amber-200"
-                : tone === "green" ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                : tone === "slate" ? "bg-slate-100 text-slate-600 ring-slate-300"
-                : "bg-white text-slate-600 ring-slate-200";
+            const cls = TONE[chipTone[ch.key]][filter === ch.key ? 0 : 1];
             return (
               <button
                 key={ch.key}
