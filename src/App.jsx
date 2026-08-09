@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown,
 } from "./billing";
@@ -419,6 +419,21 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
   const [filter, setFilter] = useState("all"); // all | due | settled | disc
   const [area, setArea] = useState("all");
 
+  // Compute every balance + "billed this month" ONCE by scanning transactions a
+  // single time (instead of re-scanning all txns per consumer per render). Keeps
+  // the 135-row list snappy on modest phones and as bills accumulate.
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const { balById, billedIds } = useMemo(() => {
+    const bal = new Map();
+    for (const c of consumers) bal.set(c.id, c.openingArrears || 0);
+    const billed = new Set();
+    for (const t of txns) {
+      if (bal.has(t.consumerId)) bal.set(t.consumerId, bal.get(t.consumerId) + (t.type === "bill" ? t.amount : -t.amount));
+      if (t.type === "bill" && (t.createdAt || "").slice(0, 7) === monthKey) billed.add(t.consumerId);
+    }
+    return { balById: bal, billedIds: billed };
+  }, [consumers, txns, monthKey]);
+
   if (selected) {
     return (
       <ReadingEntry
@@ -435,12 +450,11 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
   }
 
   // "Done this cycle" = billed in the current calendar month. Order-independent,
-  // so the reader can walk in any direction and still see who is left.
-  const monthKey = new Date().toISOString().slice(0, 7);
-  const isDone = (c) =>
-    txns.some((t) => t.type === "bill" && t.consumerId === c.id && (t.createdAt || "").slice(0, 7) === monthKey);
+  // so the reader can walk in any direction and still see who is left. Both use
+  // the precomputed maps above — O(1) lookups, no per-consumer txn scan.
+  const isDone = (c) => billedIds.has(c.id);
   const doneCount = consumers.filter(isDone).length;
-  const hasDue = (c) => balanceOf(c, txns) > 0;
+  const hasDue = (c) => (balById.get(c.id) ?? 0) > 0;
   const dueCount = consumers.filter(hasDue).length;
   const isDisc = (c) => c.status === "disconnected";
   const discCount = consumers.filter(isDisc).length;
@@ -563,7 +577,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
       {/* compact rows */}
       <div className="space-y-2">
         {list.map((c) => {
-          const bal = balanceOf(c, txns);
+          const bal = balById.get(c.id) ?? 0;
           const done = isDone(c);
           return (
             <Card key={c.id} className="flex items-center gap-3 p-3" onClick={() => setSelected(c)}>
