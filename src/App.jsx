@@ -291,7 +291,9 @@ function Login() {
 
 function TopBar({ role, setRole, email, userRole }) {
   const { lang, setLang, t } = useLang();
+  const [showPw, setShowPw] = useState(false);
   return (
+    <>
     <header className="animate-gradient relative overflow-hidden bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 text-white shadow-lg">
       <div className="relative z-10 mx-auto flex max-w-5xl flex-col gap-3 px-4 pb-6 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:pb-7 sm:pt-4">
         {/* brand — single line, never wraps */}
@@ -334,6 +336,15 @@ function TopBar({ role, setRole, email, userRole }) {
             {lang === "en" ? "മല" : "EN"}
           </button>
           <button
+            onClick={() => setShowPw(true)}
+            title="Change password"
+            className="shrink-0 rounded-lg bg-white/15 p-2 ring-1 ring-white/15 hover:bg-white/25"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 0-1.4 1.4l2.6-2.6m0 0L15 13l2-2-2-2m-1.6 1.6L15 9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
             onClick={() => supabase.auth.signOut()}
             title={email ? `Sign out (${email})` : "Sign out"}
             className="shrink-0 rounded-lg bg-black/15 p-2 ring-1 ring-white/15 hover:bg-black/25"
@@ -348,6 +359,45 @@ function TopBar({ role, setRole, email, userRole }) {
         <path d="M0 40 L0 24 Q 180 44 360 24 T 720 24 T 1080 24 T 1440 24 L1440 40 Z" opacity="0.5" />
       </svg>
     </header>
+    {showPw && <ChangePasswordModal email={email} onClose={() => setShowPw(false)} />}
+    </>
+  );
+}
+
+// Any logged-in user can change their own password here (works for the
+// mobile @kolayil.local accounts too, which have no real inbox for email reset).
+function ChangePasswordModal({ email, onClose }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canSave = pw.length >= 6 && pw === pw2 && !busy;
+
+  async function save() {
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Password changed");
+    onClose();
+  }
+
+  return (
+    <Modal title="Change password" subtitle={email} onClose={onClose}>
+      <div className="space-y-3">
+        <Field label="New password" hint="At least 6 characters">
+          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={inputClass} autoFocus />
+        </Field>
+        <Field label="Confirm new password">
+          <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} className={inputClass} />
+        </Field>
+        {pw2 && pw !== pw2 && <p className="text-xs text-rose-600">Passwords don't match.</p>}
+        {pw && pw.length < 6 && <p className="text-xs text-amber-600">Use at least 6 characters.</p>}
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Button variant="ghost" className="flex-1" onClick={onClose}>Cancel</Button>
+        <Button className="flex-1" disabled={!canSave} onClick={save}>Save</Button>
+      </div>
+    </Modal>
   );
 }
 
