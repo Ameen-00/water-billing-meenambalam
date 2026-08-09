@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { scheme, money, upiUri, amountInWords } from "./billing";
+import { scheme, money, upiUri, amountInWords, readerLabel } from "./billing";
 import { Button, Modal } from "./ui";
 import { useLang } from "./i18n";
 
@@ -120,7 +120,7 @@ export function BillReceipt({ data }) {
         </>
       )}
       <Dashed />
-      {readerName && <div className="text-[10px]">Reader: {String(readerName).replace(/@kolayil\.local$/i, "")}</div>}
+      {readerName && <div className="text-[10px]">Reader: {readerLabel(readerName)}</div>}
       <div className="mt-1 text-[10px]">Signature: ____________</div>
       <div className="text-center text-[10px]">Thank you!</div>
     </Paper>

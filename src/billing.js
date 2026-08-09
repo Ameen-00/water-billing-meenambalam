@@ -45,6 +45,17 @@ export const initialTariff = {
   dueDaysWithFine: 30,
 };
 
+// Friendly names for staff logins, keyed by the mobile part of the login.
+// Add more here as more readers/admins are created (e.g. "9037979978": "Office").
+export const staffNames = {
+  "9745899685": "Gireesh",
+};
+export function readerLabel(readerName) {
+  if (!readerName) return "";
+  const id = String(readerName).replace(/@kolayil\.local$/i, "");
+  return staffNames[id] || id;
+}
+
 export function money(n) {
   const v = Math.round((Math.abs(n) + Number.EPSILON) * 100) / 100;
   const s = CURRENCY + v.toLocaleString("en-IN");
