@@ -16,7 +16,7 @@ export const scheme = {
   name: "Kolayil Kudivella Suchithwa Samithi",
   malayalamName: "കോലായിൽ കുടിവെള്ള ശുചിത്വ സമിതി",
   subtitle: "Meenambalam, Kalluvathukkal · Reg. No. Q 1060/02",
-  phone: "+91 90379 79978",
+  phone: "+91 97458 99685",
   // Cash-only for launch. Next month: set showUpi = true AND put the REAL UPI
   // id below, then the "Scan to pay" QR comes back on every bill/receipt.
   showUpi: false,

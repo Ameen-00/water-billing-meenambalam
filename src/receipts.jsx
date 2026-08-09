@@ -120,7 +120,7 @@ export function BillReceipt({ data }) {
         </>
       )}
       <Dashed />
-      {readerName && <div className="text-[10px]">Reader: {readerName}</div>}
+      {readerName && <div className="text-[10px]">Reader: {String(readerName).replace(/@kolayil\.local$/i, "")}</div>}
       <div className="mt-1 text-[10px]">Signature: ____________</div>
       <div className="text-center text-[10px]">Thank you!</div>
     </Paper>
