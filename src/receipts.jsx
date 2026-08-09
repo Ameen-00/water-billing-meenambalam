@@ -176,14 +176,14 @@ export function ReceiptModal({ receipt, onClose, onPay }) {
   const { t } = useLang();
   const isBill = receipt.kind === "bill";
 
-  // Thermal roll: explicit width + AUTO length = one continuous strip (never
-  // truncated by a fixed page length). 48mm matches the printable width and,
-  // with the driver set to 80mm, gives the compact length the user liked.
+  // Thermal roll: explicit width + AUTO length = one continuous strip. 58mm
+  // matches the physical roll so it lines up with the driver's 58mm setting and
+  // the WHOLE bill prints (48mm fought the driver and truncated it at "Prev").
   // Removed on close so A4 report printing still works.
   useEffect(() => {
     document.body.classList.add("printing-receipt");
     const style = document.createElement("style");
-    style.textContent = "@page { size: 48mm auto; margin: 0; }";
+    style.textContent = "@page { size: 58mm auto; margin: 0; }";
     document.head.appendChild(style);
     return () => {
       document.body.classList.remove("printing-receipt");
