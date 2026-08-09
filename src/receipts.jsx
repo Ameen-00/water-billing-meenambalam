@@ -189,26 +189,35 @@ function printReceipt() {
 
   const html =
     '<!doctype html><html><head><meta charset="utf-8"><style>' + css +
-    '\n@page{size:58mm auto;margin:0}' +
-    'html,body{margin:0 !important;padding:0 !important;background:#fff}' +
+    '\nhtml,body{margin:0 !important;padding:0 !important;background:#fff}' +
     '#receipt-print{position:static !important;top:auto !important;left:auto !important;' +
     'width:48mm !important;margin:0 !important;padding:1mm 1.5mm !important;' +
     'box-shadow:none !important;outline:none !important;--tw-ring-shadow:0 0 #0000 !important;visibility:visible !important}' +
     '#receipt-print *{visibility:visible !important}' +
     '</style></head><body>' + node.outerHTML + '</body></html>';
 
+  // Real width so the slip lays out (and measures) correctly at 48mm.
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:58mm;height:10px;border:0;opacity:0;";
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow.document;
   doc.open(); doc.write(html); doc.close();
-  // CSS is inlined, so nothing loads async — a short settle is enough on any phone.
   setTimeout(() => {
+    // Measure the rendered slip and force ONE page exactly that tall. Phones that
+    // ignore "size:auto" (Poco/MIUI/HyperOS) split a long strip into pages and
+    // print only page 1 (cut at "Prev"); an explicit single-page height stops that.
+    const r = doc.getElementById("receipt-print");
+    const px = r ? r.getBoundingClientRect().height : 0;
+    const mm = Math.max(40, Math.ceil((px / 96) * 25.4) + 3);
+    const st = doc.createElement("style");
+    st.textContent = "@page{size:58mm " + mm + "mm;margin:0}";
+    doc.head.appendChild(st);
+    iframe.style.height = Math.ceil(px) + "px";
     try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
     catch { window.print(); }
     setTimeout(() => iframe.remove(), 3000);
-  }, 250);
+  }, 300);
 }
 
 export function ReceiptModal({ receipt, onClose, onPay }) {
