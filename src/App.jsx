@@ -77,7 +77,19 @@ function AppInner() {
       const totalDue = arrears + charge.currentCharge;
       const billNo = docNo("B", seq.bill + 1);
       const lastBill = [...txns].reverse().find((t) => t.consumerId === consumer.id && t.type === "bill");
-      const meta = { billNo, charge };
+      const receiptData = {
+        consumer, charge, billNo, arrears, totalDue, date: today(),
+        arrearsInfo: arrearsBreakdown(consumer, arrears),
+        currReadingDate: today(),
+        prevReadingDate: lastBill?.date || "—",
+        dueNoFine: addDays(tariff.dueDaysNoFine ?? 15),
+        dueWithFine: addDays(tariff.dueDaysWithFine ?? 30),
+        readerName: session?.user?.email || "",
+      };
+      // Save everything needed to RE-PRINT this exact bill later (printer failed,
+      // customer wants another copy) without re-entering the reading.
+      const { consumer: _c, charge: _ch, ...snapshot } = receiptData;
+      const meta = { billNo, charge, snapshot };
       const txn = await db.insertTransaction({ consumerId: consumer.id, type: "bill", amount: charge.currentCharge, date: today(), meta });
       setTxns((p) => [...p, txn]);
       // Advance the meter baseline:
@@ -93,22 +105,19 @@ function AppInner() {
         setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
       }
       setSeq((s) => ({ ...s, bill: s.bill + 1 }));
-      setReceipt({
-        kind: "bill",
-        data: {
-          consumer, charge, billNo, arrears, totalDue, date: today(),
-          arrearsInfo: arrearsBreakdown(consumer, arrears),
-          currReadingDate: today(),
-          prevReadingDate: lastBill?.date || "—",
-          dueNoFine: addDays(tariff.dueDaysNoFine ?? 15),
-          dueWithFine: addDays(tariff.dueDaysWithFine ?? 30),
-          readerName: session?.user?.email || "",
-        },
-      });
+      setReceipt({ kind: "bill", data: receiptData });
       toast.success(`Bill ${billNo} saved`);
     } catch (e) {
       toast.error("Could not save the bill: " + e.message);
     }
+  }
+
+  // Re-open a past bill/receipt for printing again — no re-entering the reading.
+  function reprintTxn(consumer, txn) {
+    const m = txn.meta || {};
+    if (!m.snapshot) { toast.error("This older entry has no saved copy to reprint."); return; }
+    if (txn.type === "bill") setReceipt({ kind: "bill", data: { consumer, charge: m.charge, ...m.snapshot } });
+    else setReceipt({ kind: "payment", data: { consumer, ...m.snapshot } });
   }
 
   async function recordPayment(consumer, { amount, payerName, reference, mode, alliedFor }) {
@@ -117,18 +126,17 @@ function AppInner() {
       const balanceAfter = before - amount;
       const receiptNo = docNo("R", seq.receipt + 1);
       const lastBill = [...txns].reverse().find((t) => t.consumerId === consumer.id && t.type === "bill");
-      const meta = { receiptNo, payerName, reference, mode, alliedFor };
+      const receiptData = {
+        consumer, amount, payerName, reference, mode, alliedFor, receiptNo, balanceAfter, date: today(),
+        spotBillNo: lastBill?.meta?.billNo || "—",
+        lastCharge: lastBill?.meta?.charge || null,
+      };
+      const { consumer: _pc, ...snapshot } = receiptData;
+      const meta = { receiptNo, payerName, reference, mode, alliedFor, snapshot };
       const txn = await db.insertTransaction({ consumerId: consumer.id, type: "payment", amount, date: today(), meta });
       setTxns((p) => [...p, txn]);
       setSeq((s) => ({ ...s, receipt: s.receipt + 1 }));
-      setReceipt({
-        kind: "payment",
-        data: {
-          consumer, amount, payerName, reference, mode, alliedFor, receiptNo, balanceAfter, date: today(),
-          spotBillNo: lastBill?.meta?.billNo || "—",
-          lastCharge: lastBill?.meta?.charge || null,
-        },
-      });
+      setReceipt({ kind: "payment", data: receiptData });
       toast.success(`Payment ${receiptNo} recorded`);
     } catch (e) {
       toast.error("Could not save the payment: " + e.message);
@@ -188,7 +196,7 @@ function AppInner() {
             {userRole === "admin" && role === "admin" ? (
               <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} />
             ) : (
-              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} />
+              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} onReprint={reprintTxn} />
             )}
           </main>
         </div>
@@ -404,7 +412,7 @@ function ChangePasswordModal({ email, onClose }) {
 // ---------------------------------------------------------------------------
 // METER READER FLOW
 // ---------------------------------------------------------------------------
-function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
+function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
   const { t: tr } = useLang();
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
@@ -420,6 +428,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
         arrears={balanceOf(selected, txns)}
         onBack={() => setSelected(null)}
         onPay={onPay}
+        onReprint={onReprint}
         onGenerate={(charge) => { onGenerate(selected, charge); setSelected(null); }}
       />
     );
@@ -583,7 +592,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay }) {
   );
 }
 
-function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay }) {
+function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay, onReprint }) {
   const { t: tr } = useLang();
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
@@ -673,27 +682,37 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         </div>
       )}
 
-      {/* Recent activity */}
+      {/* Recent activity — tap any row to PRINT IT AGAIN (no re-entering the reading) */}
       {recent.length > 0 && (
         <Card className="p-4">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("recentActivity")}</h3>
-          {recent.map((t) => (
-            <div key={t.id} className="flex items-center justify-between py-1.5 text-sm">
-              <div className="min-w-0">
-                <div className="text-slate-700">
-                  {t.type === "bill" ? `${tr("bill")} ${t.meta?.billNo || ""}` : `${tr("payment")} ${t.meta?.receiptNo || ""}`}
+          {recent.map((t) => {
+            const canReprint = onReprint && t.meta?.snapshot;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                disabled={!canReprint}
+                onClick={() => canReprint && onReprint(consumer, t)}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left text-sm ${canReprint ? "hover:bg-slate-50" : "cursor-default"}`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-slate-700">
+                    {t.type === "bill" ? `${tr("bill")} ${t.meta?.billNo || ""}` : `${tr("payment")} ${t.meta?.receiptNo || ""}`}
+                    {canReprint && <span className="text-[10px] font-semibold text-blue-600">🖨 {tr("reprint")}</span>}
+                  </div>
+                  <div className="truncate text-xs text-slate-400">
+                    {t.date}
+                    {t.type === "bill" && t.meta?.charge?.metered ? ` · ${t.meta.charge.prevReading}→${t.meta.charge.currentReading}${t.meta.charge.consumption != null ? ` (${t.meta.charge.consumption} L)` : ""}` : ""}
+                    {t.type === "payment" && t.meta?.mode ? ` · ${t.meta.mode}` : ""}
+                  </div>
                 </div>
-                <div className="truncate text-xs text-slate-400">
-                  {t.date}
-                  {t.type === "bill" && t.meta?.charge?.metered ? ` · ${t.meta.charge.prevReading}→${t.meta.charge.currentReading}${t.meta.charge.consumption != null ? ` (${t.meta.charge.consumption} L)` : ""}` : ""}
-                  {t.type === "payment" && t.meta?.mode ? ` · ${t.meta.mode}` : ""}
-                </div>
-              </div>
-              <span className={`font-medium ${t.type === "bill" ? "text-rose-600" : "text-sky-600"}`}>
-                {t.type === "bill" ? "+" : "−"}{money(t.amount)}
-              </span>
-            </div>
-          ))}
+                <span className={`shrink-0 font-medium ${t.type === "bill" ? "text-rose-600" : "text-sky-600"}`}>
+                  {t.type === "bill" ? "+" : "−"}{money(t.amount)}
+                </span>
+              </button>
+            );
+          })}
         </Card>
       )}
 
