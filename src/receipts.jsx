@@ -172,12 +172,14 @@ export function ReceiptModal({ receipt, onClose, onPay }) {
   const { t } = useLang();
   const isBill = receipt.kind === "bill";
 
-  // While a receipt is open, print on a 48mm continuous roll (no page splitting).
-  // Removed on close so A4 report printing still works normally.
+  // While a receipt is open, defer the page size to whatever the printer driver
+  // is set to (58mm / 80mm) instead of forcing 48mm — forcing it fought the
+  // driver and caused overlapping text. The slip itself stays 48mm wide so it
+  // fits a 58mm roll's printable area. Removed on close so A4 reports still work.
   useEffect(() => {
     document.body.classList.add("printing-receipt");
     const style = document.createElement("style");
-    style.textContent = "@page { size: 48mm auto; margin: 0; }";
+    style.textContent = "@page { size: auto; margin: 0; }";
     document.head.appendChild(style);
     return () => {
       document.body.classList.remove("printing-receipt");
