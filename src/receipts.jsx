@@ -172,6 +172,42 @@ export function PaymentReceipt({ data }) {
   );
 }
 
+// Print ONLY the receipt, in its own clean page. Nothing from the app layout is
+// on that page, so it can't truncate, duplicate, or leave a big blank gap. We
+// copy the app's stylesheets so the slip looks identical, then print an iframe.
+function printReceipt() {
+  const node = document.getElementById("receipt-print");
+  if (!node) { window.print(); return; }
+
+  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+    .map((el) => el.outerHTML)
+    .join("\n");
+
+  const html =
+    '<!doctype html><html><head><meta charset="utf-8">' + styles +
+    '<style>' +
+    '@page { size: 58mm auto; margin: 0; }' +
+    'html,body { margin:0; padding:0; background:#fff; }' +
+    '#receipt-print { position:static !important; width:48mm !important; margin:0 !important;' +
+    ' box-shadow:none !important; outline:none !important; --tw-ring-shadow:0 0 #0000 !important; }' +
+    '</style></head><body>' + node.outerHTML + '</body></html>';
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  iframe.srcdoc = html;
+  iframe.onload = () => {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch { window.print(); }
+      setTimeout(() => iframe.remove(), 2000);
+    }, 400);
+  };
+  document.body.appendChild(iframe);
+}
+
 export function ReceiptModal({ receipt, onClose, onPay }) {
   const { t } = useLang();
   const isBill = receipt.kind === "bill";
@@ -201,7 +237,7 @@ export function ReceiptModal({ receipt, onClose, onPay }) {
       </div>
       <div className="mt-4 flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={onClose}>Close</Button>
-        <Button className="flex-1" onClick={() => window.print()}>🖨 Print</Button>
+        <Button className="flex-1" onClick={printReceipt}>🖨 Print</Button>
       </div>
       {isBill && onPay && (
         <Button variant="gold" className="mt-2 w-full" onClick={() => onPay(receipt.data.consumer)}>
