@@ -180,15 +180,18 @@ function AppInner() {
   else
     content = (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-800">
-        <TopBar role={role} setRole={setRole} email={session.user?.email} userRole={userRole} />
+        {/* Hidden entirely while printing a receipt, so only the 48mm slip prints (no 2nd page / duplicate). */}
+        <div id="app-shell">
+          <TopBar role={role} setRole={setRole} email={session.user?.email} userRole={userRole} />
 
-        <main key={role} className="animate-fade-in mx-auto max-w-5xl px-4 pb-24 pt-5">
-          {userRole === "admin" && role === "admin" ? (
-            <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} />
-          ) : (
-            <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} />
-          )}
-        </main>
+          <main key={role} className="animate-fade-in mx-auto max-w-5xl px-4 pb-24 pt-5">
+            {userRole === "admin" && role === "admin" ? (
+              <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} />
+            ) : (
+              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} />
+            )}
+          </main>
+        </div>
 
         {paying && (
           <PaymentModal

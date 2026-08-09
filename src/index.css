@@ -43,6 +43,12 @@
     visibility: visible;
   }
 
+  /* Hide the whole app while a receipt prints, so the tall page behind the
+     modal can't spill onto a 2nd sheet and repeat the bill. */
+  body.printing-receipt #app-shell {
+    display: none !important;
+  }
+
   /* Thermal roll: fill the paper width and print as one continuous strip.
      Scoped to .printing-receipt so A4 report printing is unaffected. */
   body.printing-receipt {
