@@ -110,11 +110,15 @@ export function BillReceipt({ data }) {
         <div>Pay by {dueNoFine} — no fine</div>
         <div>Pay by {dueWithFine} — with fine</div>
       </div>
-      <Dashed />
-      <div className="flex flex-col items-center gap-0.5 py-0.5">
-        <QRCodeSVG value={qr} size={84} level="M" />
-        <div className="text-center text-[10px] font-semibold">Scan to pay · UPI · {scheme.upi.vpa}</div>
-      </div>
+      {scheme.showUpi && (
+        <>
+          <Dashed />
+          <div className="flex flex-col items-center gap-0.5 py-0.5">
+            <QRCodeSVG value={qr} size={84} level="M" />
+            <div className="text-center text-[10px] font-semibold">Scan to pay · UPI · {scheme.upi.vpa}</div>
+          </div>
+        </>
+      )}
       <Dashed />
       {readerName && <div className="text-[10px]">Reader: {readerName}</div>}
       <div className="mt-1 text-[10px]">Signature: ____________</div>
@@ -156,7 +160,7 @@ export function PaymentReceipt({ data }) {
       <div className="mt-1 text-[10px] italic">({amountInWords(amount)} received)</div>
       <Dashed />
       <div className="text-center text-[11px] font-bold tracking-wider">✓ PAID</div>
-      {remaining > 0 && (
+      {scheme.showUpi && remaining > 0 && (
         <div className="mt-1 flex flex-col items-center gap-1">
           <QRCodeSVG value={upiUri({ amount: remaining, note: `${consumer.consumerNo} balance` })} size={92} level="M" />
           <div className="text-[10px]">Scan to pay balance</div>

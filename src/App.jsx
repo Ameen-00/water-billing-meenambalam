@@ -758,7 +758,7 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
   const [payerName, setPayerName] = useState(consumer.name);
   const [reference, setReference] = useState("");
   const [alliedFor, setAlliedFor] = useState("");
-  const [mode, setMode] = useState("UPI");
+  const [mode, setMode] = useState("Cash");
   const value = Number(amount) || 0;
   const after = balance - value;
 
@@ -775,7 +775,7 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
         </Field>
 
         <div className="grid grid-cols-3 gap-2">
-          {["UPI", "Cash", "Bank"].map((m) => (
+          {["Cash", "UPI", "Bank"].map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
