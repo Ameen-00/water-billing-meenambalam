@@ -173,39 +173,42 @@ export function PaymentReceipt({ data }) {
 }
 
 // Print ONLY the receipt, in its own clean page. Nothing from the app layout is
-// on that page, so it can't truncate, duplicate, or leave a big blank gap. We
-// copy the app's stylesheets so the slip looks identical, then print an iframe.
+// on that page, so it can't truncate, duplicate, or leave a big blank gap.
+// We INLINE all CSS text (not <link>s) so there is no async stylesheet load to
+// race against — every phone renders identically before printing.
 function printReceipt() {
   const node = document.getElementById("receipt-print");
   if (!node) { window.print(); return; }
 
-  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map((el) => el.outerHTML)
-    .join("\n");
+  let css = "";
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      css += Array.from(sheet.cssRules).map((r) => r.cssText).join("\n") + "\n";
+    } catch { /* cross-origin sheet — skip */ }
+  }
 
   const html =
-    '<!doctype html><html><head><meta charset="utf-8">' + styles +
-    '<style>' +
-    '@page { size: 58mm auto; margin: 0; }' +
-    'html,body { margin:0; padding:0; background:#fff; }' +
-    '#receipt-print { position:static !important; width:48mm !important; margin:0 !important;' +
-    ' box-shadow:none !important; outline:none !important; --tw-ring-shadow:0 0 #0000 !important; }' +
+    '<!doctype html><html><head><meta charset="utf-8"><style>' + css +
+    '\n@page{size:58mm auto;margin:0}' +
+    'html,body{margin:0 !important;padding:0 !important;background:#fff}' +
+    '#receipt-print{position:static !important;top:auto !important;left:auto !important;' +
+    'width:48mm !important;margin:0 !important;padding:1mm 1.5mm !important;' +
+    'box-shadow:none !important;outline:none !important;--tw-ring-shadow:0 0 #0000 !important;visibility:visible !important}' +
+    '#receipt-print *{visibility:visible !important}' +
     '</style></head><body>' + node.outerHTML + '</body></html>';
 
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-  iframe.srcdoc = html;
-  iframe.onload = () => {
-    setTimeout(() => {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      } catch { window.print(); }
-      setTimeout(() => iframe.remove(), 2000);
-    }, 400);
-  };
   document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  // CSS is inlined, so nothing loads async — a short settle is enough on any phone.
+  setTimeout(() => {
+    try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+    catch { window.print(); }
+    setTimeout(() => iframe.remove(), 3000);
+  }, 250);
 }
 
 export function ReceiptModal({ receipt, onClose, onPay }) {
