@@ -44,9 +44,19 @@
   }
 
   /* Hide the whole app while a receipt prints, so the tall page behind the
-     modal can't spill onto a 2nd sheet and repeat the bill. */
+     modal can't spill onto a 2nd sheet and repeat the bill. Also collapse the
+     full-height wrapper so no blank second page is ever generated. */
   body.printing-receipt #app-shell {
     display: none !important;
+  }
+  body.printing-receipt #app-root {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+  html:has(body.printing-receipt),
+  body.printing-receipt {
+    height: auto !important;
+    min-height: 0 !important;
   }
 
   /* Thermal roll: fill the paper width and print as one continuous strip.

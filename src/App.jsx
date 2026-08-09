@@ -187,7 +187,7 @@ function AppInner() {
   else if (!loaded) content = <FullScreen title="Loading" msg="Fetching your consumers…" spinner />;
   else
     content = (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-800">
+      <div id="app-root" className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-800">
         {/* Hidden entirely while printing a receipt, so only the 48mm slip prints (no 2nd page / duplicate). */}
         <div id="app-shell">
           <TopBar role={role} setRole={setRole} email={session.user?.email} userRole={userRole} />
