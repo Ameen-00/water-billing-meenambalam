@@ -408,13 +408,13 @@ function Reports({ consumers, txns }) {
         <h2 className="text-lg font-bold">Reports</h2>
         <div className="flex gap-2">
           {view === "summary" && <Button variant="ghost" className="!py-2 text-xs" onClick={exportCSV}>⬇ Excel (CSV)</Button>}
-          <Button variant="ghost" className="!py-2 text-xs" onClick={() => window.print()}>🖨 Print / PDF</Button>
+          <Button variant="ghost" className="!py-2 text-xs" onClick={() => window.print()}>⬇ Save as PDF (A4)</Button>
         </div>
       </div>
 
       {/* sub-tabs — not printed */}
       <div className="inline-flex rounded-xl bg-slate-100 p-1 text-sm print:hidden">
-        {[["summary", "Summary"], ["audit", "Monthly Audit"]].map(([k, l]) => (
+        {[["summary", "Summary"], ["audit", "Audit"]].map(([k, l]) => (
           <button
             key={k}
             onClick={() => setView(k)}
@@ -427,7 +427,7 @@ function Reports({ consumers, txns }) {
 
       {view === "audit" ? (
         <div id="print-report">
-          <MonthlyAudit consumers={consumers} txns={txns} />
+          <Audit consumers={consumers} txns={txns} />
         </div>
       ) : (
       <div id="print-report" className="space-y-4">
@@ -484,35 +484,39 @@ function Reports({ consumers, txns }) {
 }
 
 // ===========================================================================
-// MONTHLY AUDIT — one A4 report of every bill + payment in a chosen month
+// AUDIT — one A4 report of every bill + payment in a chosen day / month / year
 // ===========================================================================
-function monthLabel(k) {
+function periodLabel(type, k) {
   if (!k) return "";
-  const [y, m] = k.split("-");
   const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  if (type === "year") return k;
+  const [y, m, d] = k.split("-");
+  if (type === "day") return `${d} ${names[Number(m) - 1]} ${y}`;
   return `${names[Number(m) - 1]} ${y}`;
 }
 
-function MonthlyAudit({ consumers, txns }) {
+function Audit({ consumers, txns }) {
   const consumerById = useMemo(() => {
     const m = {};
     for (const c of consumers) m[c.id] = c;
     return m;
   }, [consumers]);
 
-  const months = useMemo(() => {
+  const [ptype, setPtype] = useState("month"); // day | month | year
+  const keyLen = ptype === "day" ? 10 : ptype === "year" ? 4 : 7;
+  const periods = useMemo(() => {
     const s = new Set();
-    for (const t of txns) { const k = (t.createdAt || "").slice(0, 7); if (k) s.add(k); }
+    for (const t of txns) { const k = (t.createdAt || "").slice(0, keyLen); if (k) s.add(k); }
     return Array.from(s).sort().reverse();
-  }, [txns]);
+  }, [txns, keyLen]);
 
-  const [month, setMonth] = useState("");
-  const activeMonth = month || months[0] || "";
+  const [period, setPeriod] = useState("");
+  const activePeriod = period || periods[0] || "";
 
-  // Print this report in A4 landscape (wide table) while this view is open.
+  // Save/print as A4 landscape, scaled so the wide table fits one page width.
   useEffect(() => {
     const style = document.createElement("style");
-    style.textContent = "@media print { @page { size: A4 landscape; margin: 8mm; } }";
+    style.textContent = "@media print { @page { size: A4 landscape; margin: 8mm; } #print-report { zoom: 0.82; } }";
     document.head.appendChild(style);
     return () => style.remove();
   }, []);
@@ -520,7 +524,7 @@ function MonthlyAudit({ consumers, txns }) {
   const { rows, totals } = useMemo(() => {
     const map = new Map();
     for (const t of txns) {
-      if ((t.createdAt || "").slice(0, 7) !== activeMonth) continue;
+      if ((t.createdAt || "").slice(0, keyLen) !== activePeriod) continue;
       const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null, billDate: "", payDate: "" };
       if (t.type === "bill") { rec.bill = t; rec.billDate = t.date; }
       else { rec.paid += t.amount; rec.payMeta = t.meta; rec.payDate = t.date; }
@@ -554,7 +558,7 @@ function MonthlyAudit({ consumers, txns }) {
       outstanding: t.outstanding + Math.max(0, r.balanceNow || 0),
     }), { used: 0, water: 0, meter: 0, thisBill: 0, total: 0, paid: 0, outstanding: 0 });
     return { rows, totals };
-  }, [txns, activeMonth, consumerById]);
+  }, [txns, activePeriod, keyLen, consumerById]);
 
   const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
   const rs = (v) => (v == null ? "—" : money(v));
@@ -572,19 +576,31 @@ function MonthlyAudit({ consumers, txns }) {
     <div className="space-y-3">
       {/* controls — not printed */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <label className="text-sm font-medium text-slate-600">Month</label>
-        <select value={activeMonth} onChange={(e) => setMonth(e.target.value)} className={inputClass + " max-w-[220px]"}>
-          {months.length === 0 && <option value="">No data yet</option>}
-          {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+        <div className="inline-flex rounded-lg bg-slate-100 p-1 text-xs">
+          {[["day", "Daily"], ["month", "Monthly"], ["year", "Yearly"]].map(([k, l]) => (
+            <button
+              key={k}
+              onClick={() => { setPtype(k); setPeriod(""); }}
+              className={`rounded-md px-3 py-1 font-medium transition ${ptype === k ? "bg-white text-blue-700 shadow" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+        <select value={activePeriod} onChange={(e) => setPeriod(e.target.value)} className={inputClass + " max-w-[220px]"}>
+          {periods.length === 0 && <option value="">No data yet</option>}
+          {periods.map((p) => <option key={p} value={p}>{periodLabel(ptype, p)}</option>)}
         </select>
-        <span className="text-xs text-slate-400">{rows.length} consumer(s) with activity</span>
+        <span className="text-xs text-slate-400">{rows.length} consumer(s)</span>
       </div>
 
       {/* print header */}
       <div className="hidden print:block">
         <h1 className="text-lg font-bold">{scheme.name}</h1>
         <p className="text-[11px] text-slate-600">{scheme.subtitle}</p>
-        <p className="mt-1 text-sm font-semibold">Monthly Audit Report — {monthLabel(activeMonth) || "—"}</p>
+        <p className="mt-1 text-sm font-semibold">
+          Audit Report — {ptype === "day" ? "Daily" : ptype === "year" ? "Yearly" : "Monthly"} · {periodLabel(ptype, activePeriod) || "—"}
+        </p>
       </div>
 
       {/* summary strip (also printed) */}
