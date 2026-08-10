@@ -521,9 +521,9 @@ function MonthlyAudit({ consumers, txns }) {
     const map = new Map();
     for (const t of txns) {
       if ((t.createdAt || "").slice(0, 7) !== activeMonth) continue;
-      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null };
-      if (t.type === "bill") rec.bill = t;
-      else { rec.paid += t.amount; rec.payMeta = t.meta; }
+      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null, billDate: "", payDate: "" };
+      if (t.type === "bill") { rec.bill = t; rec.billDate = t.date; }
+      else { rec.paid += t.amount; rec.payMeta = t.meta; rec.payDate = t.date; }
       map.set(t.consumerId, rec);
     }
     const rows = Array.from(map.entries())
@@ -531,14 +531,19 @@ function MonthlyAudit({ consumers, txns }) {
         const c = consumerById[cid];
         const ch = rec.bill?.meta?.charge || {};
         const snap = rec.bill?.meta?.snapshot || {};
+        const status = rec.bill
+          ? (ch.disconnected ? "Disconnected" : ch.absent ? "Owner away" : ch.meterReset ? "Meter reset" : "Metered")
+          : (rec.paid ? "Payment only" : "—");
         return {
           id: cid, c,
+          meterNo: c.meterNo || "—",
+          date: rec.billDate || rec.payDate || "—",
           billNo: rec.bill?.meta?.billNo || "—",
           prev: ch.prevReading, curr: ch.currentReading, used: ch.consumption,
-          water: ch.waterCharge, meter: ch.meterFee, thisBill: ch.currentCharge,
+          water: ch.waterCharge, meter: ch.meterFee, thisBill: ch.currentCharge, season: ch.season || "",
           arrears: snap.arrears, total: snap.totalDue,
           paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
-          balance: rec.payMeta?.snapshot?.balanceAfter,
+          balanceNow: balanceOf(c, txns), status,
         };
       })
       .filter((r) => r.c)
@@ -546,12 +551,22 @@ function MonthlyAudit({ consumers, txns }) {
     const totals = rows.reduce((t, r) => ({
       used: t.used + (r.used || 0), water: t.water + (r.water || 0), meter: t.meter + (r.meter || 0),
       thisBill: t.thisBill + (r.thisBill || 0), total: t.total + (r.total || 0), paid: t.paid + (r.paid || 0),
-    }), { used: 0, water: 0, meter: 0, thisBill: 0, total: 0, paid: 0 });
+      outstanding: t.outstanding + Math.max(0, r.balanceNow || 0),
+    }), { used: 0, water: 0, meter: 0, thisBill: 0, total: 0, paid: 0, outstanding: 0 });
     return { rows, totals };
   }, [txns, activeMonth, consumerById]);
 
   const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
   const rs = (v) => (v == null ? "—" : money(v));
+  const summary = [
+    ["Consumers", rows.length],
+    ["Water used", num(totals.used) + " L"],
+    ["Water charge", money(totals.water)],
+    ["Meter fees", money(totals.meter)],
+    ["Billed", money(totals.thisBill)],
+    ["Collected", money(totals.paid)],
+    ["Outstanding (now)", money(totals.outstanding)],
+  ];
 
   return (
     <div className="space-y-3">
@@ -567,57 +582,75 @@ function MonthlyAudit({ consumers, txns }) {
 
       {/* print header */}
       <div className="hidden print:block">
-        <h1 className="text-xl font-bold">{scheme.name}</h1>
-        <p className="text-sm">Monthly Audit — {monthLabel(activeMonth) || "—"} · {rows.length} consumers</p>
+        <h1 className="text-lg font-bold">{scheme.name}</h1>
+        <p className="text-[11px] text-slate-600">{scheme.subtitle}</p>
+        <p className="mt-1 text-sm font-semibold">Monthly Audit Report — {monthLabel(activeMonth) || "—"}</p>
+      </div>
+
+      {/* summary strip (also printed) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+        {summary.map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+            <div className="text-sm font-bold text-slate-700">{value}</div>
+          </div>
+        ))}
       </div>
 
       <Card className="overflow-x-auto">
-        <table className="w-full min-w-[920px] text-left text-xs">
-          <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+        <table className="w-full min-w-[1120px] text-left text-[11px]">
+          <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
             <tr>
-              <th className="p-2">No</th><th className="p-2">Name</th>
-              <th className="p-2 text-right">Prev</th><th className="p-2 text-right">Curr</th><th className="p-2 text-right">Used L</th>
-              <th className="p-2 text-right">Water</th><th className="p-2 text-right">Meter</th><th className="p-2 text-right">Bill</th>
-              <th className="p-2">Bill No</th><th className="p-2 text-right">Arrears</th><th className="p-2 text-right">Total</th>
-              <th className="p-2 text-right">Paid</th><th className="p-2">Mode</th><th className="p-2">Receipt</th><th className="p-2 text-right">Balance</th>
+              <th className="p-1.5">No</th><th className="p-1.5">Name</th><th className="p-1.5">Meter No</th><th className="p-1.5">Date</th>
+              <th className="p-1.5 text-right">Prev</th><th className="p-1.5 text-right">Curr</th><th className="p-1.5 text-right">Used L</th>
+              <th className="p-1.5 text-right">Water ₹</th><th className="p-1.5 text-right">M.Fee ₹</th><th className="p-1.5 text-right">Bill ₹</th>
+              <th className="p-1.5">Bill No</th><th className="p-1.5 text-right">Arrears ₹</th><th className="p-1.5 text-right">Total ₹</th>
+              <th className="p-1.5 text-right">Paid ₹</th><th className="p-1.5">Mode</th><th className="p-1.5">Receipt</th>
+              <th className="p-1.5 text-right">Balance ₹</th><th className="p-1.5">Status</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-slate-100">
-                <td className="p-2 font-mono">{r.c.consumerNo}</td>
-                <td className="p-2">{r.c.name}</td>
-                <td className="p-2 text-right">{num(r.prev)}</td>
-                <td className="p-2 text-right">{num(r.curr)}</td>
-                <td className="p-2 text-right">{num(r.used)}</td>
-                <td className="p-2 text-right">{rs(r.water)}</td>
-                <td className="p-2 text-right">{rs(r.meter)}</td>
-                <td className="p-2 text-right font-medium">{rs(r.thisBill)}</td>
-                <td className="p-2 font-mono text-[10px]">{r.billNo}</td>
-                <td className="p-2 text-right">{rs(r.arrears)}</td>
-                <td className="p-2 text-right">{rs(r.total)}</td>
-                <td className="p-2 text-right text-sky-700">{r.paid ? money(r.paid) : "—"}</td>
-                <td className="p-2">{r.mode || "—"}</td>
-                <td className="p-2 font-mono text-[10px]">{r.receiptNo || "—"}</td>
-                <td className="p-2 text-right font-medium">{rs(r.balance)}</td>
+                <td className="p-1.5 font-mono">{r.c.consumerNo}</td>
+                <td className="p-1.5">{r.c.name}</td>
+                <td className="p-1.5 font-mono text-[10px]">{r.meterNo}</td>
+                <td className="p-1.5 whitespace-nowrap">{r.date}</td>
+                <td className="p-1.5 text-right">{num(r.prev)}</td>
+                <td className="p-1.5 text-right">{num(r.curr)}</td>
+                <td className="p-1.5 text-right">{num(r.used)}</td>
+                <td className="p-1.5 text-right">{rs(r.water)}</td>
+                <td className="p-1.5 text-right">{rs(r.meter)}</td>
+                <td className="p-1.5 text-right font-medium">{rs(r.thisBill)}</td>
+                <td className="p-1.5 font-mono text-[10px]">{r.billNo}</td>
+                <td className="p-1.5 text-right">{rs(r.arrears)}</td>
+                <td className="p-1.5 text-right">{rs(r.total)}</td>
+                <td className="p-1.5 text-right text-sky-700">{r.paid ? money(r.paid) : "—"}</td>
+                <td className="p-1.5">{r.mode || "—"}</td>
+                <td className="p-1.5 font-mono text-[10px]">{r.receiptNo || "—"}</td>
+                <td className="p-1.5 text-right font-medium">{money(r.balanceNow)}</td>
+                <td className="p-1.5 text-[10px]">{r.status}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={15} className="p-6 text-center text-slate-400">No bills or payments in this month.</td></tr>
+              <tr><td colSpan={18} className="p-6 text-center text-slate-400">No bills or payments in this month.</td></tr>
             )}
           </tbody>
           {rows.length > 0 && (
             <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
               <tr>
-                <td className="p-2" colSpan={4}>TOTAL ({rows.length})</td>
-                <td className="p-2 text-right">{num(totals.used)}</td>
-                <td className="p-2 text-right">{money(totals.water)}</td>
-                <td className="p-2 text-right">{money(totals.meter)}</td>
-                <td className="p-2 text-right">{money(totals.thisBill)}</td>
-                <td className="p-2"></td><td className="p-2"></td>
-                <td className="p-2 text-right">{money(totals.total)}</td>
-                <td className="p-2 text-right text-sky-700">{money(totals.paid)}</td>
-                <td className="p-2" colSpan={3}></td>
+                <td className="p-1.5" colSpan={6}>TOTAL ({rows.length})</td>
+                <td className="p-1.5 text-right">{num(totals.used)}</td>
+                <td className="p-1.5 text-right">{money(totals.water)}</td>
+                <td className="p-1.5 text-right">{money(totals.meter)}</td>
+                <td className="p-1.5 text-right">{money(totals.thisBill)}</td>
+                <td className="p-1.5"></td>
+                <td className="p-1.5"></td>
+                <td className="p-1.5 text-right">{money(totals.total)}</td>
+                <td className="p-1.5 text-right text-sky-700">{money(totals.paid)}</td>
+                <td className="p-1.5"></td><td className="p-1.5"></td>
+                <td className="p-1.5 text-right">{money(totals.outstanding)}</td>
+                <td className="p-1.5"></td>
               </tr>
             </tfoot>
           )}
