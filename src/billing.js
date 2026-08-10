@@ -14,7 +14,7 @@ export const CURRENCY = "₹";
 
 export const scheme = {
   name: "Kolayil Kudivella Suchithwa Samithi",
-  malayalamName: "കോലായിൽ കുടിവെള്ള ശുചിത്വ സമിതി",
+  malayalamName: "കോലയിൽ കുടിവെള്ള ശുചിത്വ സമിതി",
   subtitle: "Meenambalam, Kalluvathukkal · Reg. No. Q 1060/02",
   phone: "+91 81389 71257",
   // Cash-only for launch. Next month: set showUpi = true AND put the REAL UPI
