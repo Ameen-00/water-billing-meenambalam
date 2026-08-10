@@ -16,7 +16,7 @@ export const scheme = {
   name: "Kolayil Kudivella Suchithwa Samithi",
   malayalamName: "കോലായിൽ കുടിവെള്ള ശുചിത്വ സമിതി",
   subtitle: "Meenambalam, Kalluvathukkal · Reg. No. Q 1060/02",
-  phone: "+91 97458 99685",
+  phone: "+91 81389 71257",
   // Cash-only for launch. Next month: set showUpi = true AND put the REAL UPI
   // id below, then the "Scan to pay" QR comes back on every bill/receipt.
   showUpi: false,
@@ -199,6 +199,23 @@ export function arrearsBreakdown(consumer, arrears) {
   ].filter((r) => r.amount > 0);
   if (!rows.length) return null;
   return { rows, reason: (m.reason || "").trim(), period: (m.period || "").trim() };
+}
+
+// Search matcher used by the reader + admin lists. A plain NUMBER is treated as
+// a consumer-number lookup (prefix match on the digits, so "13" finds KWS-13,
+// not every number containing "13"), and also matches phone/meter. Any text
+// query matches name / number / meter / address / phone (+ optional extra).
+export function matchesConsumer(c, query, extra = "") {
+  const s = String(query || "").trim().toLowerCase();
+  if (!s) return true;
+  if (/^\d+$/.test(s)) {
+    const numPart = String(c.consumerNo || "").replace(/\D/g, "");
+    if (numPart === s || numPart.startsWith(s)) return true;
+    if (String(c.phone || "").includes(s)) return true;
+    if (String(c.meterNo || "").includes(s)) return true;
+    return false;
+  }
+  return [c.name, c.consumerNo, c.meterNo, c.address, c.phone, extra].join(" ").toLowerCase().includes(s);
 }
 
 export function upiUri({ amount, note } = {}) {

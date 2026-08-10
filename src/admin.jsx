@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { scheme, money, balanceOf, categoryLabel } from "./billing";
+import { scheme, money, balanceOf, categoryLabel, matchesConsumer } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
 // ===========================================================================
@@ -79,9 +79,7 @@ function AdminDashboard({ consumers, txns, onOpen, onPay, onGoReports }) {
       .map((c) => ({ c, bal: balanceOf(c, txns) }))
       .filter(({ c, bal }) => {
         if (mode === "due" && bal <= 0) return false;
-        if (!s) return true;
-        const hay = [c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase();
-        return hay.includes(s) || (docIndex[c.id] || []).join(" ").includes(s);
+        return matchesConsumer(c, s, (docIndex[c.id] || []).join(" "));
       });
     const dir = sort.dir === "asc" ? 1 : -1;
     list.sort((a, b) => {

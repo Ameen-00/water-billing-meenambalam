@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, matchesConsumer,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -478,7 +478,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
   const list = consumers
     .filter((c) => {
       if (area !== "all" && areaOf(c) !== area) return false;
-      if (s && ![c.name, c.consumerNo, c.meterNo, c.address, c.phone].join(" ").toLowerCase().includes(s)) return false;
+      if (s && !matchesConsumer(c, s)) return false;
       if (filter === "tobill") return !isDone(c);
       if (filter === "done") return isDone(c);
       if (filter === "due") return hasDue(c);
