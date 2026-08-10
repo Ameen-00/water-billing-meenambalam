@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { scheme, money, balanceOf, categoryLabel } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
@@ -402,16 +402,36 @@ function Reports({ consumers, txns }) {
     URL.revokeObjectURL(url);
   }
 
+  const [view, setView] = useState("summary");
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold">Reports</h2>
         <div className="flex gap-2">
-          <Button variant="ghost" className="!py-2 text-xs" onClick={exportCSV}>⬇ Excel (CSV)</Button>
+          {view === "summary" && <Button variant="ghost" className="!py-2 text-xs" onClick={exportCSV}>⬇ Excel (CSV)</Button>}
           <Button variant="ghost" className="!py-2 text-xs" onClick={() => window.print()}>🖨 Print / PDF</Button>
         </div>
       </div>
 
+      {/* sub-tabs — not printed */}
+      <div className="inline-flex rounded-xl bg-slate-100 p-1 text-sm print:hidden">
+        {[["summary", "Summary"], ["audit", "Monthly Audit"]].map(([k, l]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`rounded-lg px-4 py-1.5 font-medium transition ${view === k ? "bg-white text-blue-700 shadow" : "text-slate-500 hover:text-slate-700"}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {view === "audit" ? (
+        <div id="print-report">
+          <MonthlyAudit consumers={consumers} txns={txns} />
+        </div>
+      ) : (
       <div id="print-report" className="space-y-4">
         <div className="hidden print:block">
           <h1 className="text-xl font-bold">{scheme.name}</h1>
@@ -460,6 +480,151 @@ function Reports({ consumers, txns }) {
           </table>
         </Card>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ===========================================================================
+// MONTHLY AUDIT — one A4 report of every bill + payment in a chosen month
+// ===========================================================================
+function monthLabel(k) {
+  if (!k) return "";
+  const [y, m] = k.split("-");
+  const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${names[Number(m) - 1]} ${y}`;
+}
+
+function MonthlyAudit({ consumers, txns }) {
+  const consumerById = useMemo(() => {
+    const m = {};
+    for (const c of consumers) m[c.id] = c;
+    return m;
+  }, [consumers]);
+
+  const months = useMemo(() => {
+    const s = new Set();
+    for (const t of txns) { const k = (t.createdAt || "").slice(0, 7); if (k) s.add(k); }
+    return Array.from(s).sort().reverse();
+  }, [txns]);
+
+  const [month, setMonth] = useState("");
+  const activeMonth = month || months[0] || "";
+
+  // Print this report in A4 landscape (wide table) while this view is open.
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = "@media print { @page { size: A4 landscape; margin: 8mm; } }";
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
+  const { rows, totals } = useMemo(() => {
+    const map = new Map();
+    for (const t of txns) {
+      if ((t.createdAt || "").slice(0, 7) !== activeMonth) continue;
+      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null };
+      if (t.type === "bill") rec.bill = t;
+      else { rec.paid += t.amount; rec.payMeta = t.meta; }
+      map.set(t.consumerId, rec);
+    }
+    const rows = Array.from(map.entries())
+      .map(([cid, rec]) => {
+        const c = consumerById[cid];
+        const ch = rec.bill?.meta?.charge || {};
+        const snap = rec.bill?.meta?.snapshot || {};
+        return {
+          id: cid, c,
+          billNo: rec.bill?.meta?.billNo || "—",
+          prev: ch.prevReading, curr: ch.currentReading, used: ch.consumption,
+          water: ch.waterCharge, meter: ch.meterFee, thisBill: ch.currentCharge,
+          arrears: snap.arrears, total: snap.totalDue,
+          paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
+          balance: rec.payMeta?.snapshot?.balanceAfter,
+        };
+      })
+      .filter((r) => r.c)
+      .sort((a, b) => Number(String(a.c.consumerNo).replace(/\D/g, "")) - Number(String(b.c.consumerNo).replace(/\D/g, "")));
+    const totals = rows.reduce((t, r) => ({
+      used: t.used + (r.used || 0), water: t.water + (r.water || 0), meter: t.meter + (r.meter || 0),
+      thisBill: t.thisBill + (r.thisBill || 0), total: t.total + (r.total || 0), paid: t.paid + (r.paid || 0),
+    }), { used: 0, water: 0, meter: 0, thisBill: 0, total: 0, paid: 0 });
+    return { rows, totals };
+  }, [txns, activeMonth, consumerById]);
+
+  const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
+  const rs = (v) => (v == null ? "—" : money(v));
+
+  return (
+    <div className="space-y-3">
+      {/* controls — not printed */}
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <label className="text-sm font-medium text-slate-600">Month</label>
+        <select value={activeMonth} onChange={(e) => setMonth(e.target.value)} className={inputClass + " max-w-[220px]"}>
+          {months.length === 0 && <option value="">No data yet</option>}
+          {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+        </select>
+        <span className="text-xs text-slate-400">{rows.length} consumer(s) with activity</span>
+      </div>
+
+      {/* print header */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-bold">{scheme.name}</h1>
+        <p className="text-sm">Monthly Audit — {monthLabel(activeMonth) || "—"} · {rows.length} consumers</p>
+      </div>
+
+      <Card className="overflow-x-auto">
+        <table className="w-full min-w-[920px] text-left text-xs">
+          <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+            <tr>
+              <th className="p-2">No</th><th className="p-2">Name</th>
+              <th className="p-2 text-right">Prev</th><th className="p-2 text-right">Curr</th><th className="p-2 text-right">Used L</th>
+              <th className="p-2 text-right">Water</th><th className="p-2 text-right">Meter</th><th className="p-2 text-right">Bill</th>
+              <th className="p-2">Bill No</th><th className="p-2 text-right">Arrears</th><th className="p-2 text-right">Total</th>
+              <th className="p-2 text-right">Paid</th><th className="p-2">Mode</th><th className="p-2">Receipt</th><th className="p-2 text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t border-slate-100">
+                <td className="p-2 font-mono">{r.c.consumerNo}</td>
+                <td className="p-2">{r.c.name}</td>
+                <td className="p-2 text-right">{num(r.prev)}</td>
+                <td className="p-2 text-right">{num(r.curr)}</td>
+                <td className="p-2 text-right">{num(r.used)}</td>
+                <td className="p-2 text-right">{rs(r.water)}</td>
+                <td className="p-2 text-right">{rs(r.meter)}</td>
+                <td className="p-2 text-right font-medium">{rs(r.thisBill)}</td>
+                <td className="p-2 font-mono text-[10px]">{r.billNo}</td>
+                <td className="p-2 text-right">{rs(r.arrears)}</td>
+                <td className="p-2 text-right">{rs(r.total)}</td>
+                <td className="p-2 text-right text-sky-700">{r.paid ? money(r.paid) : "—"}</td>
+                <td className="p-2">{r.mode || "—"}</td>
+                <td className="p-2 font-mono text-[10px]">{r.receiptNo || "—"}</td>
+                <td className="p-2 text-right font-medium">{rs(r.balance)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={15} className="p-6 text-center text-slate-400">No bills or payments in this month.</td></tr>
+            )}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+              <tr>
+                <td className="p-2" colSpan={4}>TOTAL ({rows.length})</td>
+                <td className="p-2 text-right">{num(totals.used)}</td>
+                <td className="p-2 text-right">{money(totals.water)}</td>
+                <td className="p-2 text-right">{money(totals.meter)}</td>
+                <td className="p-2 text-right">{money(totals.thisBill)}</td>
+                <td className="p-2"></td><td className="p-2"></td>
+                <td className="p-2 text-right">{money(totals.total)}</td>
+                <td className="p-2 text-right text-sky-700">{money(totals.paid)}</td>
+                <td className="p-2" colSpan={3}></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </Card>
     </div>
   );
 }
