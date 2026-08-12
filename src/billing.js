@@ -167,6 +167,18 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
   };
 }
 
+// Add reader-entered Fine + Other charges on top of any computed charge. Kept as
+// their own fields (not water bands) so the bill shows them as separate lines.
+export function applyExtras(charge, { fine = 0, other = 0, otherReason = "" } = {}) {
+  const f = Math.max(0, Number(fine) || 0);
+  const o = Math.max(0, Number(other) || 0);
+  return {
+    ...charge,
+    fine: f, other: o, otherReason: (otherReason || "").trim(),
+    currentCharge: Math.round((charge.currentCharge || 0) + f + o),
+  };
+}
+
 // "Owner not home" — charge the monthly minimum without a reading, and remember
 // how much to advance the meter baseline (the first slab's litres).
 export function minimumCharge(tariff) {

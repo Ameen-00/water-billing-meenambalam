@@ -92,6 +92,8 @@ export function BillReceipt({ data }) {
       ))}
       <L l="Water charge" r={money(charge.waterCharge)} />
       <L l="Meter fee" r={money(charge.meterFee)} />
+      {charge.fine > 0 && <L l="Fine" r={money(charge.fine)} />}
+      {charge.other > 0 && <L l={charge.otherReason ? `Other (${charge.otherReason})` : "Other charges"} r={money(charge.other)} />}
       {charge.season && <L l="Season" r={charge.season} />}
       <Dashed />
       <L l="This bill" r={money(charge.currentCharge)} bold />

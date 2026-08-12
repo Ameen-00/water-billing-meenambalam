@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, matchesConsumer,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, matchesConsumer, applyExtras,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -104,6 +104,12 @@ function AppInner() {
         await db.updatePrevReading(consumer.id, newPrev);
         setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
       }
+      // Any fine charged this month adds to the running unpaid fine (drives next month's +₹5).
+      if ((charge.fine || 0) > 0) {
+        const newFine = (consumer.fineDue || 0) + charge.fine;
+        await db.updateFineDue(consumer.id, newFine);
+        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, fineDue: newFine } : c)));
+      }
       setSeq((s) => ({ ...s, bill: s.bill + 1 }));
       setReceipt({ kind: "bill", data: receiptData });
       toast.success(`Bill ${billNo} saved`);
@@ -135,6 +141,11 @@ function AppInner() {
       const meta = { receiptNo, payerName, reference, mode, alliedFor, snapshot };
       const txn = await db.insertTransaction({ consumerId: consumer.id, type: "payment", amount, date: today(), meta });
       setTxns((p) => [...p, txn]);
+      // Paid up in full → clear the unpaid fine so the +₹5/month stops.
+      if (balanceAfter <= 0 && (consumer.fineDue || 0) > 0) {
+        await db.updateFineDue(consumer.id, 0);
+        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, fineDue: 0 } : c)));
+      }
       setSeq((s) => ({ ...s, receipt: s.receipt + 1 }));
       setReceipt({ kind: "payment", data: receiptData });
       toast.success(`Payment ${receiptNo} recorded`);
@@ -610,7 +621,12 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const { t: tr } = useLang();
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
-  const charge = calculateCharge(consumer, reading, tariff, reset);
+  // Fine auto-fills ₹5 for a consumer who already has an unpaid fine (reader can clear it).
+  const [fine, setFine] = useState(consumer.fineDue > 0 ? "5" : "");
+  const [other, setOther] = useState("");
+  const [otherReason, setOtherReason] = useState("");
+  const extras = { fine, other, otherReason };
+  const charge = applyExtras(calculateCharge(consumer, reading, tariff, reset), extras);
   const totalDue = arrears + charge.currentCharge;
   const arrInfo = arrearsBreakdown(consumer, arrears);
 
@@ -761,7 +777,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
             <div className="border-t border-dashed border-slate-200 pt-3">
               <button
                 type="button"
-                onClick={() => onGenerate(minimumCharge(tariff))}
+                onClick={() => onGenerate(applyExtras(minimumCharge(tariff), extras))}
                 className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
               >
                 {tr("ownerNotHome")}
@@ -771,6 +787,31 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         ) : (
           <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
             {tr("flatNote")}
+          </div>
+        )}
+      </Card>
+
+      {/* Fine / Other charges — can apply to any consumer */}
+      <Card className="p-4">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("extraCharges")}</h3>
+        {consumer.fineDue > 0 && (
+          <div className="mb-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700 ring-1 ring-amber-200">
+            {tr("finePending")}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={tr("fine")}>
+            <input type="number" inputMode="numeric" value={fine} onChange={(e) => setFine(e.target.value)} placeholder="0" className={inputClass} />
+          </Field>
+          <Field label={tr("otherCharges")}>
+            <input type="number" inputMode="numeric" value={other} onChange={(e) => setOther(e.target.value)} placeholder="0" className={inputClass} />
+          </Field>
+        </div>
+        {Number(other) > 0 && (
+          <div className="mt-3">
+            <Field label={tr("otherReason")} hint={tr("otherReasonHint")}>
+              <input value={otherReason} onChange={(e) => setOtherReason(e.target.value)} className={inputClass} />
+            </Field>
           </div>
         )}
       </Card>
@@ -791,6 +832,8 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         ))}
         <Line l={tr("waterCharge")} v={money(charge.waterCharge)} />
         <Line l={tr("meterFee")} v={money(charge.meterFee)} />
+        {charge.fine > 0 && <Line l={tr("fine")} v={money(charge.fine)} />}
+        {charge.other > 0 && <Line l={charge.otherReason ? `${tr("otherCharges")} — ${charge.otherReason}` : tr("otherCharges")} v={money(charge.other)} />}
         <div className="my-2 border-t border-dashed border-slate-200" />
         <Line l={tr("thisBill")} v={money(charge.currentCharge)} />
         <Line l={tr("prevArrears")} v={money(arrears)} />

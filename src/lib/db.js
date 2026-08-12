@@ -6,6 +6,7 @@ const consumerFromRow = (r) => ({
   address: r.address, category: r.category, metered: r.metered,
   prevReading: Number(r.prev_reading), openingArrears: Number(r.opening_arrears),
   phone: r.phone, status: r.status, dueMeta: r.due_meta || null,
+  fineDue: Number(r.fine_due) || 0,
 });
 const txnFromRow = (r) => ({
   id: r.id, consumerId: r.consumer_id, type: r.type,
@@ -58,6 +59,11 @@ export async function updatePrevReading(consumerId, prevReading) {
 
 export async function updateConsumerStatus(consumerId, status) {
   const { error } = await supabase.from("consumers").update({ status }).eq("id", consumerId);
+  if (error) throw error;
+}
+
+export async function updateFineDue(consumerId, fineDue) {
+  const { error } = await supabase.from("consumers").update({ fine_due: fineDue }).eq("id", consumerId);
   if (error) throw error;
 }
 
