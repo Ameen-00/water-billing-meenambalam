@@ -20,6 +20,13 @@ function addDays(n) {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+// A fixed day of THIS month (e.g. the 20th) — used for the bill's due dates.
+function dueDay(n) {
+  const d = new Date();
+  d.setDate(n);
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export default function App() {
   return (
     <LangProvider>
@@ -82,8 +89,8 @@ function AppInner() {
         arrearsInfo: arrearsBreakdown(consumer, arrears),
         currReadingDate: today(),
         prevReadingDate: lastBill?.date || "—",
-        dueNoFine: addDays(tariff.dueDaysNoFine ?? 15),
-        dueWithFine: addDays(tariff.dueDaysWithFine ?? 30),
+        dueNoFine: dueDay(tariff.dueDayNoFine ?? 20),
+        dueWithFine: dueDay(tariff.dueDayWithFine ?? 25),
         readerName: session?.user?.email || "",
       };
       // Save everything needed to RE-PRINT this exact bill later (printer failed,

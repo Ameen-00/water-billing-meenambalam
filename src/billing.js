@@ -41,8 +41,9 @@ export const initialTariff = {
   highFrom: 20000, highPer: 50, highRateJanMay: 10, highRateJunDec: 5,
   meterFee: 5,
   disconnectedCharge: 30,
-  dueDaysNoFine: 15,
-  dueDaysWithFine: 30,
+  // Fixed calendar due dates each month: pay by the 20th (no fine), 25th (with fine).
+  dueDayNoFine: 20,
+  dueDayWithFine: 25,
 };
 
 // Friendly names for staff logins, keyed by the mobile part of the login.
@@ -132,10 +133,12 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
   const midLitres = Math.max(0, Math.min(consumption, midTo) - midFrom);
   let midAmount = 0;
   if (midLitres > 0) {
-    midAmount = r2((midLitres / midPer) * midRate);
+    // Charge per STARTED block (round up), so any part of the first 100 L = ₹5 minimum.
+    const midBlocks = Math.ceil(midLitres / midPer);
+    midAmount = midBlocks * midRate;
     parts.push({
       label: `${grp(midFrom + 1)}–${grp(midTo)} L`,
-      detail: `${grp(midLitres)} L @ ${CURRENCY}${midRate}/${grp(midPer)} L`,
+      detail: `${grp(midLitres)} L → ${midBlocks} × ${CURRENCY}${midRate}/${grp(midPer)} L`,
       amount: midAmount,
     });
   }
@@ -148,10 +151,12 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
   const highLitres = Math.max(0, consumption - highFrom);
   let highAmount = 0;
   if (highLitres > 0) {
-    highAmount = r2((highLitres / highPer) * highRate);
+    // Same block-rounding above 20,000 L (per 50 L).
+    const highBlocks = Math.ceil(highLitres / highPer);
+    highAmount = highBlocks * highRate;
     parts.push({
       label: `Above ${grp(highFrom)} L`,
-      detail: `${grp(highLitres)} L @ ${CURRENCY}${highRate}/${grp(highPer)} L`,
+      detail: `${grp(highLitres)} L → ${highBlocks} × ${CURRENCY}${highRate}/${grp(highPer)} L`,
       amount: highAmount,
     });
   }
