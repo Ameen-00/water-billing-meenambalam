@@ -52,6 +52,11 @@ export async function insertConsumer(c) {
   return consumerFromRow(data);
 }
 
+export async function deleteTransaction(id) {
+  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function updatePrevReading(consumerId, prevReading) {
   const { error } = await supabase.from("consumers").update({ prev_reading: prevReading }).eq("id", consumerId);
   if (error) throw error;

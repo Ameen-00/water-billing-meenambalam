@@ -118,6 +118,28 @@ function AppInner() {
     }
   }
 
+  // Cancel a wrong bill: delete it AND undo the meter-baseline advance it caused,
+  // so the reader can take the correct reading and bill again.
+  async function cancelBill(consumer, txn) {
+    if (!txn || txn.type !== "bill") return;
+    try {
+      const ch = txn.meta?.charge || {};
+      await db.deleteTransaction(txn.id);
+      setTxns((p) => p.filter((t) => t.id !== txn.id));
+      let restore = null;
+      if (ch.absent) restore = consumer.prevReading - (ch.assumedAdvance || 0);
+      else if (ch.metered && ch.prevReading != null) restore = ch.prevReading;
+      if (restore != null && restore !== consumer.prevReading) {
+        await db.updatePrevReading(consumer.id, restore);
+        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: restore } : c)));
+      }
+      if (receipt?.data?.consumer?.id === consumer.id) setReceipt(null);
+      toast.success(`Bill ${txn.meta?.billNo || ""} cancelled`);
+    } catch (e) {
+      toast.error("Could not cancel the bill: " + e.message);
+    }
+  }
+
   // Re-open a past bill/receipt for printing again — no re-entering the reading.
   function reprintTxn(consumer, txn) {
     const m = txn.meta || {};
@@ -205,9 +227,9 @@ function AppInner() {
 
           <main key={role} className="animate-fade-in mx-auto max-w-5xl px-4 pb-24 pt-5">
             {userRole === "admin" && role === "admin" ? (
-              <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} />
+              <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} onReprint={reprintTxn} onCancelBill={cancelBill} />
             ) : (
-              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} onReprint={reprintTxn} />
+              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} onReprint={reprintTxn} onCancelBill={cancelBill} />
             )}
           </main>
         </div>
@@ -423,7 +445,7 @@ function ChangePasswordModal({ email, onClose }) {
 // ---------------------------------------------------------------------------
 // METER READER FLOW
 // ---------------------------------------------------------------------------
-function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
+function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint, onCancelBill }) {
   const { t: tr } = useLang();
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
@@ -455,6 +477,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
         onBack={() => setSelected(null)}
         onPay={onPay}
         onReprint={onReprint}
+        onCancelBill={onCancelBill}
         onGenerate={(charge) => { onGenerate(selected, charge); setSelected(null); }}
       />
     );
@@ -617,7 +640,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint }) {
   );
 }
 
-function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay, onReprint }) {
+function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay, onReprint, onCancelBill }) {
   const { t: tr } = useLang();
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
@@ -636,6 +659,8 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const canSave = isDisc || !consumer.metered || reading !== "";
 
   const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
+  // Only the newest bill can be cancelled (so restoring the meter reading is safe).
+  const lastBillId = [...txns].reverse().find((t) => t.type === "bill" && t.consumerId === consumer.id)?.id;
 
   // --- edge-case guards -------------------------------------------------
   // 1) Already billed this calendar month -> warn before making a second bill.
@@ -718,29 +743,40 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{tr("recentActivity")}</h3>
           {recent.map((t) => {
             const canReprint = onReprint && t.meta?.snapshot;
+            const canCancel = onCancelBill && t.type === "bill" && t.id === lastBillId;
             return (
-              <button
-                key={t.id}
-                type="button"
-                disabled={!canReprint}
-                onClick={() => canReprint && onReprint(consumer, t)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left text-sm ${canReprint ? "hover:bg-slate-50" : "cursor-default"}`}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 text-slate-700">
-                    {t.type === "bill" ? `${tr("bill")} ${t.meta?.billNo || ""}` : `${tr("payment")} ${t.meta?.receiptNo || ""}`}
-                    {canReprint && <span className="text-[10px] font-semibold text-blue-600">🖨 {tr("reprint")}</span>}
+              <div key={t.id} className="flex items-center justify-between gap-1 py-1">
+                <button
+                  type="button"
+                  disabled={!canReprint}
+                  onClick={() => canReprint && onReprint(consumer, t)}
+                  className={`flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-sm ${canReprint ? "hover:bg-slate-50" : "cursor-default"}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      {t.type === "bill" ? `${tr("bill")} ${t.meta?.billNo || ""}` : `${tr("payment")} ${t.meta?.receiptNo || ""}`}
+                      {canReprint && <span className="text-[10px] font-semibold text-blue-600">🖨 {tr("reprint")}</span>}
+                    </div>
+                    <div className="truncate text-xs text-slate-400">
+                      {t.date}
+                      {t.type === "bill" && t.meta?.charge?.metered ? ` · ${t.meta.charge.prevReading}→${t.meta.charge.currentReading}${t.meta.charge.consumption != null ? ` (${t.meta.charge.consumption} L)` : ""}` : ""}
+                      {t.type === "payment" && t.meta?.mode ? ` · ${t.meta.mode}` : ""}
+                    </div>
                   </div>
-                  <div className="truncate text-xs text-slate-400">
-                    {t.date}
-                    {t.type === "bill" && t.meta?.charge?.metered ? ` · ${t.meta.charge.prevReading}→${t.meta.charge.currentReading}${t.meta.charge.consumption != null ? ` (${t.meta.charge.consumption} L)` : ""}` : ""}
-                    {t.type === "payment" && t.meta?.mode ? ` · ${t.meta.mode}` : ""}
-                  </div>
-                </div>
-                <span className={`shrink-0 font-medium ${t.type === "bill" ? "text-rose-600" : "text-sky-600"}`}>
-                  {t.type === "bill" ? "+" : "−"}{money(t.amount)}
-                </span>
-              </button>
+                  <span className={`shrink-0 font-medium ${t.type === "bill" ? "text-rose-600" : "text-sky-600"}`}>
+                    {t.type === "bill" ? "+" : "−"}{money(t.amount)}
+                  </span>
+                </button>
+                {canCancel && (
+                  <button
+                    type="button"
+                    onClick={() => { if (window.confirm(tr("cancelBillConfirm"))) onCancelBill(consumer, t); }}
+                    className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
+                  >
+                    ✕ {tr("cancelBill")}
+                  </button>
+                )}
+              </div>
             );
           })}
         </Card>

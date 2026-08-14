@@ -5,14 +5,14 @@ import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui
 // ===========================================================================
 // AdminArea — tab shell for Dashboard / Reports / Settings, plus consumer detail
 // ===========================================================================
-export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus }) {
+export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus, onCancelBill }) {
   const [tab, setTab] = useState("dashboard");
   const [detailId, setDetailId] = useState(null);
 
   if (detailId) {
     const consumer = consumers.find((c) => c.id === detailId);
     return (
-      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} />
+      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} onCancelBill={onCancelBill} />
     );
   }
 
@@ -217,8 +217,9 @@ function Stat({ label, value, tone, sub, onClick, active }) {
 // ===========================================================================
 // CONSUMER DETAIL — full ledger / history
 // ===========================================================================
-function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus }) {
+function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, onCancelBill }) {
   const isDisc = consumer.status === "disconnected";
+  const lastBillId = [...txns].reverse().find((t) => t.type === "bill" && t.consumerId === consumer.id)?.id;
   const rows = useMemo(() => {
     const list = txns.filter((t) => t.consumerId === consumer.id);
     let bal = consumer.openingArrears;
@@ -267,7 +268,7 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus }) 
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">Account history</div>
         <div className="divide-y divide-slate-100">
-          {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} />)}
+          {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} consumer={consumer} lastBillId={lastBillId} onCancelBill={onCancelBill} />)}
         </div>
       </Card>
 
@@ -308,7 +309,7 @@ function Info({ label, value, strong }) {
   );
 }
 
-function LedgerRow({ row, consumerName }) {
+function LedgerRow({ row, consumerName, consumer, lastBillId, onCancelBill }) {
   if (row.kind === "opening") {
     return (
       <div className="flex items-center justify-between px-4 py-3">
@@ -343,11 +344,22 @@ function LedgerRow({ row, consumerName }) {
           {!isBill && t.meta.reference ? ` · ${t.meta.reference}` : ""}
         </div>
       </div>
-      <div className="text-right">
-        <div className={`text-sm font-semibold ${isBill ? "text-rose-600" : "text-sky-600"}`}>
-          {isBill ? "+" : "−"}{money(t.amount)}
+      <div className="flex items-center gap-2">
+        <div className="text-right">
+          <div className={`text-sm font-semibold ${isBill ? "text-rose-600" : "text-sky-600"}`}>
+            {isBill ? "+" : "−"}{money(t.amount)}
+          </div>
+          <div className="text-xs text-slate-400">bal {money(row.balance)}</div>
         </div>
-        <div className="text-xs text-slate-400">bal {money(row.balance)}</div>
+        {isBill && onCancelBill && t.id === lastBillId && (
+          <button
+            type="button"
+            onClick={() => { if (confirm("Cancel this bill? It will be deleted and the meter reading restored.")) onCancelBill(consumer, t); }}
+            className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
+          >
+            ✕ Cancel
+          </button>
+        )}
       </div>
     </div>
   );
