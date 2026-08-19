@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { scheme, money, balanceOf, categoryLabel, matchesConsumer, arrearsBreakdown } from "./billing";
+import { scheme, money, balanceOf, categoryLabel, matchesConsumer, oldDuesSplit } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
 // ===========================================================================
@@ -337,7 +337,7 @@ export function ArrearsSplit({ info, className = "" }) {
 
 function LedgerRow({ row, consumerName, consumer, lastBillId, onCancelBill }) {
   if (row.kind === "opening") {
-    const info = arrearsBreakdown(consumer, consumer.openingArrears);
+    const info = oldDuesSplit(consumer);
     return (
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">

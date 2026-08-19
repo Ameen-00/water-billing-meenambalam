@@ -218,6 +218,29 @@ export function arrearsBreakdown(consumer, arrears) {
   return { rows, reason: (m.reason || "").trim(), period: (m.period || "").trim() };
 }
 
+// The old-dues split for MONITORING — always returns the register breakdown
+// from due_meta (water / meter / other / fine), regardless of the current
+// balance. Use this on the account view; arrearsBreakdown() (balance-gated) is
+// for the fresh-bill snapshot only.
+export function oldDuesSplit(consumer) {
+  const m = consumer && consumer.dueMeta;
+  if (!m) return null;
+  const rows = [
+    { key: "water", amount: Number(m.water) || 0 },
+    { key: "meter", amount: Number(m.meter) || 0 },
+    { key: "other", amount: Number(m.other) || 0 },
+    { key: "fine", amount: Number(m.fine) || 0 },
+  ].filter((r) => r.amount > 0);
+  if (!rows.length) return null;
+  return {
+    rows,
+    total: rows.reduce((s, r) => s + r.amount, 0),
+    reason: (m.reason || "").trim(),
+    period: (m.period || "").trim(),
+    months: (m.months || "").trim(),
+  };
+}
+
 // Search matcher used by the reader + admin lists. A plain NUMBER is treated as
 // a consumer-number lookup (prefix match on the digits, so "13" finds KWS-13,
 // not every number containing "13"), and also matches phone/meter. Any text
