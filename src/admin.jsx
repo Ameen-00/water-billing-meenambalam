@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { scheme, money, balanceOf, categoryLabel, matchesConsumer } from "./billing";
+import { scheme, money, balanceOf, categoryLabel, matchesConsumer, arrearsBreakdown } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
 // ===========================================================================
@@ -309,18 +309,48 @@ function Info({ label, value, strong }) {
   );
 }
 
+// Small labelled split of the old dues (water / meter / other / fine).
+const ARREARS_LABELS = { water: "Water", meter: "Meter", other: "Other", fine: "Fine" };
+export function ArrearsSplit({ info, className = "" }) {
+  if (!info) return null;
+  return (
+    <div className={"rounded-xl bg-amber-50 px-3 py-2 ring-1 ring-amber-100 " + className}>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Old dues breakdown</span>
+        {(info.period || info.months) && (
+          <span className="text-[11px] text-amber-600">
+            {info.period}{info.months ? ` · ${info.months}` : ""}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+        {info.rows.map((r) => (
+          <span key={r.key}>
+            {ARREARS_LABELS[r.key] || r.key}: <span className="font-semibold text-slate-800">{money(r.amount)}</span>
+          </span>
+        ))}
+      </div>
+      {info.reason && <div className="mt-1 text-[11px] text-slate-500">{info.reason}</div>}
+    </div>
+  );
+}
+
 function LedgerRow({ row, consumerName, consumer, lastBillId, onCancelBill }) {
   if (row.kind === "opening") {
+    const info = arrearsBreakdown(consumer, consumer.openingArrears);
     return (
-      <div className="flex items-center justify-between px-4 py-3">
-        <div>
-          <div className="text-sm font-medium text-slate-600">{row.label}</div>
-          <div className="text-xs text-slate-400">before system started</div>
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium text-slate-600">{row.label}</div>
+            <div className="text-xs text-slate-400">before system started</div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold text-slate-500">{money(row.amount)}</div>
+            <div className="text-xs text-slate-400">bal {money(row.balance)}</div>
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-sm font-semibold text-slate-500">{money(row.amount)}</div>
-          <div className="text-xs text-slate-400">bal {money(row.balance)}</div>
-        </div>
+        {info && <ArrearsSplit info={info} className="mt-2" />}
       </div>
     );
   }
@@ -572,6 +602,20 @@ function Audit({ consumers, txns }) {
     return { rows, totals };
   }, [txns, activePeriod, keyLen, consumerById]);
 
+  // Old dues (before the system) split by component, across all consumers.
+  const oldDues = useMemo(() => {
+    const agg = { water: 0, meter: 0, other: 0, fine: 0, total: 0, count: 0 };
+    for (const c of consumers) {
+      const m = c.dueMeta;
+      if (!m) continue;
+      const w = Number(m.water) || 0, mt = Number(m.meter) || 0, o = Number(m.other) || 0, f = Number(m.fine) || 0;
+      if (w + mt + o + f <= 0) continue;
+      agg.water += w; agg.meter += mt; agg.other += o; agg.fine += f;
+      agg.total += w + mt + o + f; agg.count += 1;
+    }
+    return agg;
+  }, [consumers]);
+
   const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
   const rs = (v) => (v == null ? "—" : money(v));
   const summary = [
@@ -624,6 +668,24 @@ function Audit({ consumers, txns }) {
           </div>
         ))}
       </div>
+
+      {/* Old dues (before the system) — component breakdown across all consumers */}
+      {oldDues.total > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Old dues (before system) — {oldDues.count} consumers</span>
+            <span className="text-sm font-bold text-rose-600">{money(oldDues.total)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[["Water", oldDues.water], ["Meter", oldDues.meter], ["Other", oldDues.other], ["Fine", oldDues.fine]].map(([l, v]) => (
+              <div key={l} className="rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-100">
+                <div className="text-[10px] uppercase tracking-wide text-amber-700">{l}</div>
+                <div className="text-sm font-bold text-slate-800">{money(v)}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="overflow-x-auto">
         <table className="w-full min-w-[1120px] text-left text-[11px]">
