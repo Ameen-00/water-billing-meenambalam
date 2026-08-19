@@ -457,7 +457,7 @@ function Reports({ consumers, txns }) {
 
       {/* sub-tabs — not printed */}
       <div className="inline-flex rounded-xl bg-slate-100 p-1 text-sm print:hidden">
-        {[["summary", "Summary"], ["audit", "Audit"]].map(([k, l]) => (
+        {[["summary", "Summary"], ["audit", "Audit"], ["dues", "Dues"]].map(([k, l]) => (
           <button
             key={k}
             onClick={() => setView(k)}
@@ -471,6 +471,10 @@ function Reports({ consumers, txns }) {
       {view === "audit" ? (
         <div id="print-report">
           <Audit consumers={consumers} txns={txns} />
+        </div>
+      ) : view === "dues" ? (
+        <div id="print-report">
+          <DuesRegister consumers={consumers} txns={txns} />
         </div>
       ) : (
       <div id="print-report" className="space-y-4">
@@ -536,6 +540,86 @@ function periodLabel(type, k) {
   const [y, m, d] = k.split("-");
   if (type === "day") return `${d} ${names[Number(m) - 1]} ${y}`;
   return `${names[Number(m) - 1]} ${y}`;
+}
+
+// Per-consumer pending dues, split by charge (dynamic). Printable.
+function DuesRegister({ consumers, txns }) {
+  const rows = useMemo(() =>
+    consumers
+      .map((c) => ({ c, d: duesBreakdown(c, txns) }))
+      .filter((r) => r.d.total > 0)
+      .sort((a, b) => b.d.total - a.d.total),
+  [consumers, txns]);
+
+  const totals = rows.reduce((t, r) => ({
+    water: t.water + r.d.byComponent.water, meter: t.meter + r.d.byComponent.meter,
+    other: t.other + r.d.byComponent.other, fine: t.fine + r.d.byComponent.fine, total: t.total + r.d.total,
+  }), { water: 0, meter: 0, other: 0, fine: 0, total: 0 });
+  const rs = (v) => (v ? money(v) : "—");
+
+  return (
+    <div className="space-y-3">
+      <div className="hidden print:block">
+        <h1 className="text-lg font-bold">{scheme.name}</h1>
+        <p className="text-[11px] text-slate-600">{scheme.subtitle}</p>
+        <p className="mt-1 text-sm font-semibold">Pending Dues — by charge (per consumer)</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {[["Consumers", rows.length], ["Water", money(totals.water)], ["Meter", money(totals.meter)], ["Other", money(totals.other)], ["Fine", money(totals.fine)]].map(([l, v]) => (
+          <div key={l} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">{l}</div>
+            <div className="text-sm font-bold text-slate-700">{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <Card className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <th className="p-2">No</th><th className="p-2">Name</th>
+              <th className="p-2 text-right">Water ₹</th><th className="p-2 text-right">Meter ₹</th>
+              <th className="p-2 text-right">Other ₹</th><th className="p-2 text-right">Fine ₹</th>
+              <th className="p-2 text-right">Total ₹</th><th className="p-2">Since</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ c, d }) => {
+              const oldest = d.items.find((i) => i.remainTotal > 0);
+              const since = oldest ? (oldest.kind === "old" ? (oldest.period || "old dues") : (oldest.month || oldest.date)) : "";
+              return (
+                <tr key={c.id} className="border-t border-slate-100">
+                  <td className="p-2 font-mono text-xs">{c.consumerNo}</td>
+                  <td className="p-2">{c.name}</td>
+                  <td className="p-2 text-right">{rs(d.byComponent.water)}</td>
+                  <td className="p-2 text-right">{rs(d.byComponent.meter)}</td>
+                  <td className="p-2 text-right">{rs(d.byComponent.other)}</td>
+                  <td className="p-2 text-right">{rs(d.byComponent.fine)}</td>
+                  <td className="p-2 text-right font-semibold text-rose-600">{money(d.total)}</td>
+                  <td className="p-2 text-xs text-slate-500">{since}</td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-400">No pending dues 🎉</td></tr>}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+              <tr>
+                <td className="p-2" colSpan={2}>Total ({rows.length})</td>
+                <td className="p-2 text-right">{money(totals.water)}</td>
+                <td className="p-2 text-right">{money(totals.meter)}</td>
+                <td className="p-2 text-right">{money(totals.other)}</td>
+                <td className="p-2 text-right">{money(totals.fine)}</td>
+                <td className="p-2 text-right text-rose-600">{money(totals.total)}</td>
+                <td className="p-2"></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </Card>
+    </div>
+  );
 }
 
 function Audit({ consumers, txns }) {
