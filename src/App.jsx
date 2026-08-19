@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, oldDuesSplit, matchesConsumer, applyExtras,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, duesBreakdown, matchesConsumer, applyExtras,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -659,7 +659,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const charge = applyExtras(calculateCharge(consumer, reading, tariff, reset), extras);
   const totalDue = arrears + charge.currentCharge;
   const arrInfo = arrearsBreakdown(consumer, arrears);
-  const oldSplit = oldDuesSplit(consumer);
+  const oldSplit = duesBreakdown(consumer, txns);
   const [showSplit, setShowSplit] = useState(false);
 
   const isDisc = consumer.status === "disconnected";
@@ -717,24 +717,19 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
           <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm ring-1 ring-rose-200">
             <button
               type="button"
-              onClick={() => oldSplit && setShowSplit((v) => !v)}
+              onClick={() => oldSplit.rows.length && setShowSplit((v) => !v)}
               className="flex w-full items-center justify-between text-left"
             >
               <span className="text-slate-600">
                 {tr("outstandingDues")}
-                {oldSplit && <span className="ml-1 text-xs text-rose-400">{showSplit ? "▲" : "▼ breakdown"}</span>}
+                {oldSplit.rows.length > 0 && <span className="ml-1 text-xs text-rose-400">{showSplit ? "▲" : "▼ breakdown"}</span>}
               </span>
               <span className="font-bold text-rose-600">{money(arrears)}</span>
             </button>
-            {oldSplit && showSplit && (
-              <div className="mt-2 border-t border-rose-200 pt-2">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-500">{tr("prevArrears")}</span>
-                  {(oldSplit.period || oldSplit.months) && (
-                    <span className="text-[11px] text-rose-400">{oldSplit.period}{oldSplit.months ? ` · ${oldSplit.months}` : ""}</span>
-                  )}
-                </div>
-                <div className="space-y-0.5">
+            {oldSplit.rows.length > 0 && showSplit && (
+              <div className="mt-2 space-y-2 border-t border-rose-200 pt-2">
+                <div>
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-rose-500">By charge</div>
                   {oldSplit.rows.map((r) => (
                     <div key={r.key} className="flex justify-between text-xs">
                       <span className="text-slate-500">{tr("arr_" + r.key)}</span>
@@ -742,9 +737,21 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
                     </div>
                   ))}
                   <div className="flex justify-between border-t border-rose-100 pt-0.5 text-xs font-semibold">
-                    <span className="text-slate-600">{tr("prevArrears")}</span>
+                    <span className="text-slate-600">Total</span>
                     <span className="text-rose-600">{money(oldSplit.total)}</span>
                   </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-rose-500">By month</div>
+                  {oldSplit.items.filter((it) => it.remainTotal > 0 || it.status !== "paid").map((it, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-slate-500">
+                        {it.kind === "old" ? `Old dues${it.period ? ` (${it.period}${it.months ? ` · ${it.months}` : ""})` : ""}` : `${it.date || it.month} · ${it.label}`}
+                        {it.status === "partial" && <span className="ml-1 text-amber-600">part-paid</span>}
+                      </span>
+                      <span className="font-medium text-slate-700">{money(it.remainTotal)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

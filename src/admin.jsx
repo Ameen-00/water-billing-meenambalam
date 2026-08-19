@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { scheme, money, balanceOf, categoryLabel, matchesConsumer, oldDuesSplit } from "./billing";
+import { scheme, money, balanceOf, categoryLabel, matchesConsumer, duesBreakdown } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
 // ===========================================================================
@@ -268,7 +268,7 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, on
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">Account history</div>
         <div className="divide-y divide-slate-100">
-          {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} consumer={consumer} lastBillId={lastBillId} onCancelBill={onCancelBill} />)}
+          {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} consumer={consumer} txns={txns} lastBillId={lastBillId} onCancelBill={onCancelBill} />)}
         </div>
       </Card>
 
@@ -335,9 +335,10 @@ export function ArrearsSplit({ info, className = "" }) {
   );
 }
 
-function LedgerRow({ row, consumerName, consumer, lastBillId, onCancelBill }) {
+function LedgerRow({ row, consumerName, consumer, txns, lastBillId, onCancelBill }) {
   if (row.kind === "opening") {
-    const info = oldDuesSplit(consumer);
+    const dues = duesBreakdown(consumer, txns);
+    const info = dues.rows.length ? dues : null;
     return (
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
@@ -602,19 +603,19 @@ function Audit({ consumers, txns }) {
     return { rows, totals };
   }, [txns, activePeriod, keyLen, consumerById]);
 
-  // Old dues (before the system) split by component, across all consumers.
+  // Live outstanding dues split by component, across all consumers (dynamic:
+  // old dues + every unpaid month's water/meter/other/fine, minus payments).
   const oldDues = useMemo(() => {
     const agg = { water: 0, meter: 0, other: 0, fine: 0, total: 0, count: 0 };
     for (const c of consumers) {
-      const m = c.dueMeta;
-      if (!m) continue;
-      const w = Number(m.water) || 0, mt = Number(m.meter) || 0, o = Number(m.other) || 0, f = Number(m.fine) || 0;
-      if (w + mt + o + f <= 0) continue;
-      agg.water += w; agg.meter += mt; agg.other += o; agg.fine += f;
-      agg.total += w + mt + o + f; agg.count += 1;
+      const d = duesBreakdown(c, txns);
+      if (d.total <= 0) continue;
+      agg.water += d.byComponent.water; agg.meter += d.byComponent.meter;
+      agg.other += d.byComponent.other; agg.fine += d.byComponent.fine;
+      agg.total += d.total; agg.count += 1;
     }
     return agg;
-  }, [consumers]);
+  }, [consumers, txns]);
 
   const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
   const rs = (v) => (v == null ? "—" : money(v));
@@ -673,7 +674,7 @@ function Audit({ consumers, txns }) {
       {oldDues.total > 0 && (
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700">Old dues (before system) — {oldDues.count} consumers</span>
+            <span className="text-sm font-semibold text-slate-700">Outstanding dues by charge — {oldDues.count} consumers</span>
             <span className="text-sm font-bold text-rose-600">{money(oldDues.total)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

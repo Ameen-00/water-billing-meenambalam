@@ -241,6 +241,61 @@ export function oldDuesSplit(consumer) {
   };
 }
 
+// DYNAMIC dues breakdown — the live split of what a consumer STILL owes.
+// Builds every charge oldest-first (old dues block + each monthly bill with its
+// own water/meter/other/fine), applies all payments oldest-first, and returns
+// the remaining split by component + a per-item (month) list with paid status.
+// Nothing static: add a fine or record a payment and this recomputes.
+export function duesBreakdown(consumer, txns) {
+  const round = (n) => Math.round(n);
+  const items = [];
+
+  // 1) Old dues (before the system) — one block, split from due_meta.
+  const oldTotal = Math.round(Number(consumer.openingArrears) || 0);
+  if (oldTotal > 0) {
+    const m = consumer.dueMeta || null;
+    const comp = m
+      ? { water: Number(m.water) || 0, meter: Number(m.meter) || 0, other: Number(m.other) || 0, fine: Number(m.fine) || 0 }
+      : { water: oldTotal, meter: 0, other: 0, fine: 0 };
+    items.push({ kind: "old", label: "Old dues", period: (m && m.period) || "", months: (m && m.months) || "", total: oldTotal, comp });
+  }
+
+  // 2) Each monthly bill, oldest-first, with its own component split.
+  const bills = txns
+    .filter((t) => t.consumerId === consumer.id && t.type === "bill")
+    .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  for (const b of bills) {
+    const ch = b.meta && b.meta.charge ? b.meta.charge : {};
+    const comp = {
+      water: Number(ch.waterCharge) || 0, meter: Number(ch.meterFee) || 0,
+      other: Number(ch.other) || 0, fine: Number(ch.fine) || 0,
+    };
+    items.push({ kind: "bill", label: (b.meta && b.meta.billNo) || "Bill", date: b.date, month: String(b.createdAt || "").slice(0, 7), total: Math.round(Number(b.amount) || 0), comp });
+  }
+
+  // 3) Apply all payments oldest-first.
+  let paid = txns
+    .filter((t) => t.consumerId === consumer.id && t.type === "payment")
+    .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  for (const it of items) {
+    if (paid >= it.total) { paid -= it.total; it.status = "paid"; it.remain = { water: 0, meter: 0, other: 0, fine: 0 }; it.remainTotal = 0; }
+    else if (paid <= 0) { it.status = "unpaid"; it.remain = { ...it.comp }; it.remainTotal = it.total; }
+    else {
+      const remainTotal = it.total - paid; const ratio = remainTotal / it.total;
+      it.remain = { water: round(it.comp.water * ratio), meter: round(it.comp.meter * ratio), other: round(it.comp.other * ratio), fine: round(it.comp.fine * ratio) };
+      it.remainTotal = remainTotal; it.status = "partial"; paid = 0;
+    }
+  }
+
+  // 4) Aggregate the remaining split by component.
+  const by = { water: 0, meter: 0, other: 0, fine: 0 };
+  for (const it of items) { by.water += it.remain.water; by.meter += it.remain.meter; by.other += it.remain.other; by.fine += it.remain.fine; }
+  const rows = [["water", by.water], ["meter", by.meter], ["other", by.other], ["fine", by.fine]]
+    .filter(([, v]) => v > 0).map(([key, amount]) => ({ key, amount }));
+  const total = by.water + by.meter + by.other + by.fine;
+  return { rows, total, byComponent: by, items };
+}
+
 // Search matcher used by the reader + admin lists. A plain NUMBER is treated as
 // a consumer-number lookup (prefix match on the digits, so "13" finds KWS-13,
 // not every number containing "13"), and also matches phone/meter. Any text
