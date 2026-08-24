@@ -661,10 +661,20 @@ function Audit({ consumers, txns }) {
       .map(([cid, rec]) => {
         const c = consumerById[cid];
         const ch = rec.bill?.meta?.charge || {};
-        const snap = rec.bill?.meta?.snapshot || {};
         const status = rec.bill
           ? (ch.disconnected ? "Disconnected" : ch.absent ? "Owner away" : ch.meterReset ? "Meter reset" : "Metered")
           : (rec.paid ? "Payment only" : "—");
+        // LIVE arrears = balance just before this period's bill, so corrections to
+        // opening_arrears (or earlier bills) reflect here — not the frozen snapshot.
+        let arrears = null, total = null;
+        if (rec.bill) {
+          const cutoff = String(rec.bill.createdAt || "");
+          arrears = txns.reduce((b, t) => {
+            if (t.consumerId !== cid || String(t.createdAt || "") >= cutoff) return b;
+            return t.type === "bill" ? b + t.amount : b - t.amount;
+          }, c.openingArrears);
+          total = arrears + (ch.currentCharge || 0);
+        }
         return {
           id: cid, c,
           meterNo: c.meterNo || "—",
@@ -672,7 +682,7 @@ function Audit({ consumers, txns }) {
           billNo: rec.bill?.meta?.billNo || "—",
           prev: ch.prevReading, curr: ch.currentReading, used: ch.consumption,
           water: ch.waterCharge, meter: ch.meterFee, thisBill: ch.currentCharge, season: ch.season || "",
-          arrears: snap.arrears, total: snap.totalDue,
+          arrears, total,
           paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
           balanceNow: balanceOf(c, txns), status,
         };
