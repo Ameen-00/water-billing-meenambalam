@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { scheme, money, balanceOf, categoryLabel, matchesConsumer, duesBreakdown } from "./billing";
+import { scheme, money, balanceOf, categoryLabel, matchesConsumer, duesBreakdown, splitPaidAmount, consumerCharges } from "./billing";
 import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
 
 // ===========================================================================
@@ -711,6 +711,25 @@ function Audit({ consumers, txns }) {
     return agg;
   }, [consumers, txns]);
 
+  // Collected THIS PERIOD, split by charge (this-month bill first, then old dues).
+  const collected = useMemo(() => {
+    const agg = { water: 0, meter: 0, other: 0, fine: 0, total: 0, count: 0 };
+    const paidBy = new Map();
+    for (const t of txns) {
+      if (t.type !== "payment") continue;
+      if ((t.createdAt || "").slice(0, keyLen) !== activePeriod) continue;
+      paidBy.set(t.consumerId, (paidBy.get(t.consumerId) || 0) + t.amount);
+    }
+    for (const [cid, paid] of paidBy) {
+      const c = consumerById[cid];
+      if (!c || paid <= 0) continue;
+      const s = splitPaidAmount(consumerCharges(c, txns), paid);
+      agg.water += s.water; agg.meter += s.meter; agg.other += s.other; agg.fine += s.fine;
+      agg.total += paid; agg.count += 1;
+    }
+    return agg;
+  }, [txns, activePeriod, keyLen, consumerById]);
+
   const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
   const rs = (v) => (v == null ? "—" : money(v));
   const summary = [
@@ -775,6 +794,24 @@ function Audit({ consumers, txns }) {
             {[["Water", oldDues.water], ["Meter", oldDues.meter], ["Other", oldDues.other], ["Fine", oldDues.fine]].map(([l, v]) => (
               <div key={l} className="rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-100">
                 <div className="text-[10px] uppercase tracking-wide text-amber-700">{l}</div>
+                <div className="text-sm font-bold text-slate-800">{money(v)}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Collected THIS PERIOD — split by charge (this-month bill first) */}
+      {collected.total > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Collected by charge ({periodLabel(ptype, activePeriod)}) — {collected.count} consumer(s)</span>
+            <span className="text-sm font-bold text-sky-600">{money(collected.total)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[["Water", collected.water], ["Meter", collected.meter], ["Other", collected.other], ["Fine", collected.fine]].map(([l, v]) => (
+              <div key={l} className="rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-100">
+                <div className="text-[10px] uppercase tracking-wide text-sky-700">{l}</div>
                 <div className="text-sm font-bold text-slate-800">{money(v)}</div>
               </div>
             ))}

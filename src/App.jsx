@@ -860,8 +860,9 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
             <div className="border-t border-dashed border-slate-200 pt-3">
               <button
                 type="button"
+                disabled={!!billedThisMonth}
                 onClick={() => onGenerate(applyExtras(minimumCharge(tariff), extras))}
-                className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+                className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {tr("ownerNotHome")}
               </button>
@@ -934,8 +935,13 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         <Line l={tr("totalPayable")} v={money(totalDue)} bold />
       </Card>
 
-      <Button className="w-full py-3 text-base" disabled={!canSave} onClick={() => onGenerate(charge)}>
-        {tr("savePrintBill")}
+      {billedThisMonth && (
+        <div className="rounded-xl bg-rose-50 p-3 text-center text-sm font-medium text-rose-700 ring-1 ring-rose-200">
+          Already billed this month ({billedThisMonth.meta?.billNo}). To re‑bill, cancel that bill first (below).
+        </div>
+      )}
+      <Button className="w-full py-3 text-base" disabled={!canSave || !!billedThisMonth} onClick={() => onGenerate(charge)}>
+        {billedThisMonth ? "Already billed this month" : tr("savePrintBill")}
       </Button>
     </div>
   );

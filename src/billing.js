@@ -296,6 +296,46 @@ export function duesBreakdown(consumer, txns) {
   return { rows, total, byComponent: by, items };
 }
 
+// Split a collected/paid amount across a list of charges (in the given order,
+// e.g. this-month bill first, then older dues), by component. Each charge is
+// { water, meter, other, fine }. Returns how much of the payment went to each.
+export function splitPaidAmount(charges, amount) {
+  const out = { water: 0, meter: 0, other: 0, fine: 0 };
+  let left = Math.round(Number(amount) || 0);
+  for (const c of charges) {
+    if (left <= 0) break;
+    const w = Number(c.water) || 0, m = Number(c.meter) || 0, o = Number(c.other) || 0, f = Number(c.fine) || 0;
+    const total = w + m + o + f;
+    if (total <= 0) continue;
+    const take = Math.min(left, total);
+    const r = take / total;
+    out.water += Math.round(w * r); out.meter += Math.round(m * r);
+    out.other += Math.round(o * r); out.fine += Math.round(f * r);
+    left -= take;
+  }
+  return out;
+}
+
+// The ordered charges for a consumer, newest bill first, old dues last — used
+// to allocate a payment "this month's bill first".
+export function consumerCharges(consumer, txns) {
+  const bills = txns
+    .filter((t) => t.consumerId === consumer.id && t.type === "bill")
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const list = bills.map((b) => {
+    const ch = b.meta && b.meta.charge ? b.meta.charge : {};
+    return { water: Number(ch.waterCharge) || 0, meter: Number(ch.meterFee) || 0, other: Number(ch.other) || 0, fine: Number(ch.fine) || 0 };
+  });
+  const m = consumer.dueMeta;
+  const oldTotal = Number(consumer.openingArrears) || 0;
+  if (oldTotal > 0) {
+    list.push(m
+      ? { water: Number(m.water) || 0, meter: Number(m.meter) || 0, other: Number(m.other) || 0, fine: Number(m.fine) || 0 }
+      : { water: oldTotal, meter: 0, other: 0, fine: 0 });
+  }
+  return list;
+}
+
 // Search matcher used by the reader + admin lists. A plain NUMBER is treated as
 // a consumer-number lookup (prefix match on the digits, so "13" finds KWS-13,
 // not every number containing "13"), and also matches phone/meter. Any text
