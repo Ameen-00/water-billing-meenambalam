@@ -757,9 +757,19 @@ function Audit({ consumers, txns }) {
             </button>
           ))}
         </div>
-        <select value={activePeriod} onChange={(e) => setPeriod(e.target.value)} className={inputClass + " max-w-[220px]"}>
+        {ptype === "day" && (
+          <input
+            type="date"
+            value={/^\d{4}-\d{2}-\d{2}$/.test(activePeriod) ? activePeriod : ""}
+            onChange={(e) => setPeriod(e.target.value)}
+            className={inputClass + " max-w-[170px]"}
+            title="Pick any date"
+          />
+        )}
+        <select value={activePeriod} onChange={(e) => setPeriod(e.target.value)} className={inputClass + " max-w-[200px]"}>
           {periods.length === 0 && <option value="">No data yet</option>}
-          {periods.map((p) => <option key={p} value={p}>{periodLabel(ptype, p)}</option>)}
+          {!periods.includes(activePeriod) && activePeriod && <option value={activePeriod}>{periodLabel(ptype, activePeriod)}</option>}
+          {periods.map((p) => <option key={p} value={p}>{periodLabel(ptype, p)}{p === periods[0] ? " (latest)" : ""}</option>)}
         </select>
         <span className="text-xs text-slate-400">{rows.length} consumer(s)</span>
       </div>
