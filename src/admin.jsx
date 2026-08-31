@@ -667,6 +667,7 @@ function Audit({ consumers, txns }) {
         // LIVE arrears = balance just before this period's bill, so corrections to
         // opening_arrears (or earlier bills) reflect here — not the frozen snapshot.
         let arrears = null, total = null;
+        let water = ch.waterCharge, meter = ch.meterFee;
         if (rec.bill) {
           const cutoff = String(rec.bill.createdAt || "");
           arrears = txns.reduce((b, t) => {
@@ -674,6 +675,13 @@ function Audit({ consumers, txns }) {
             return t.type === "bill" ? b + t.amount : b - t.amount;
           }, c.openingArrears);
           total = arrears + (ch.currentCharge || 0);
+        } else if (rec.paid > 0) {
+          // Payment-only row: split the payment (this-month bill first) so the
+          // Water / Meter columns aren't blank, and show what was owed before paying.
+          const s = splitPaidAmount(consumerCharges(c, txns), rec.paid);
+          water = s.water; meter = s.meter;
+          arrears = balanceOf(c, txns) + rec.paid;   // owed before this payment
+          total = arrears;
         }
         return {
           id: cid, c,
@@ -681,7 +689,7 @@ function Audit({ consumers, txns }) {
           date: rec.billDate || rec.payDate || "—",
           billNo: rec.bill?.meta?.billNo || "—",
           prev: ch.prevReading, curr: ch.currentReading, used: ch.consumption,
-          water: ch.waterCharge, meter: ch.meterFee, thisBill: ch.currentCharge, season: ch.season || "",
+          water, meter, thisBill: ch.currentCharge, season: ch.season || "",
           arrears, total,
           paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
           balanceNow: balanceOf(c, txns), status,
