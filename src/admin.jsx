@@ -667,7 +667,8 @@ function Audit({ consumers, txns }) {
         // LIVE arrears = balance just before this period's bill, so corrections to
         // opening_arrears (or earlier bills) reflect here — not the frozen snapshot.
         let arrears = null, total = null;
-        let water = ch.waterCharge, meter = ch.meterFee;
+        let water = ch.waterCharge, meter = ch.meterFee, other = ch.other, fine = ch.fine;
+        let billNo = rec.bill?.meta?.billNo || "—";
         if (rec.bill) {
           const cutoff = String(rec.bill.createdAt || "");
           arrears = txns.reduce((b, t) => {
@@ -677,19 +678,23 @@ function Audit({ consumers, txns }) {
           total = arrears + (ch.currentCharge || 0);
         } else if (rec.paid > 0) {
           // Payment-only row: split the payment (this-month bill first) so the
-          // Water / Meter columns aren't blank, and show what was owed before paying.
+          // charge columns aren't blank, show what was owed, and name the bill paid.
           const s = splitPaidAmount(consumerCharges(c, txns), rec.paid);
-          water = s.water; meter = s.meter;
+          water = s.water; meter = s.meter; other = s.other; fine = s.fine;
           arrears = balanceOf(c, txns) + rec.paid;   // owed before this payment
           total = arrears;
+          const lastBill = txns
+            .filter((t) => t.consumerId === cid && t.type === "bill")
+            .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+          billNo = (lastBill && lastBill.meta && lastBill.meta.billNo) || "—";
         }
         return {
           id: cid, c,
           meterNo: c.meterNo || "—",
           date: rec.billDate || rec.payDate || "—",
-          billNo: rec.bill?.meta?.billNo || "—",
+          billNo,
           prev: ch.prevReading, curr: ch.currentReading, used: ch.consumption,
-          water, meter, thisBill: ch.currentCharge, season: ch.season || "",
+          water, meter, other, fine, thisBill: ch.currentCharge, season: ch.season || "",
           arrears, total,
           paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
           balanceNow: balanceOf(c, txns), status,
@@ -699,9 +704,10 @@ function Audit({ consumers, txns }) {
       .sort((a, b) => Number(String(a.c.consumerNo).replace(/\D/g, "")) - Number(String(b.c.consumerNo).replace(/\D/g, "")));
     const totals = rows.reduce((t, r) => ({
       used: t.used + (r.used || 0), water: t.water + (r.water || 0), meter: t.meter + (r.meter || 0),
+      other: t.other + (r.other || 0), fine: t.fine + (r.fine || 0),
       thisBill: t.thisBill + (r.thisBill || 0), total: t.total + (r.total || 0), paid: t.paid + (r.paid || 0),
       outstanding: t.outstanding + Math.max(0, r.balanceNow || 0),
-    }), { used: 0, water: 0, meter: 0, thisBill: 0, total: 0, paid: 0, outstanding: 0 });
+    }), { used: 0, water: 0, meter: 0, other: 0, fine: 0, thisBill: 0, total: 0, paid: 0, outstanding: 0 });
     return { rows, totals };
   }, [txns, activePeriod, keyLen, consumerById]);
 
@@ -838,12 +844,13 @@ function Audit({ consumers, txns }) {
       )}
 
       <Card className="overflow-x-auto">
-        <table className="w-full min-w-[1120px] text-left text-[11px]">
+        <table className="w-full min-w-[1240px] text-left text-[11px]">
           <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
             <tr>
               <th className="p-1.5">No</th><th className="p-1.5">Name</th><th className="p-1.5">Meter No</th><th className="p-1.5">Date</th>
               <th className="p-1.5 text-right">Prev</th><th className="p-1.5 text-right">Curr</th><th className="p-1.5 text-right">Used L</th>
-              <th className="p-1.5 text-right">Water ₹</th><th className="p-1.5 text-right">M.Fee ₹</th><th className="p-1.5 text-right">Bill ₹</th>
+              <th className="p-1.5 text-right">Water ₹</th><th className="p-1.5 text-right">M.Fee ₹</th>
+              <th className="p-1.5 text-right">Other ₹</th><th className="p-1.5 text-right">Fine ₹</th><th className="p-1.5 text-right">Bill ₹</th>
               <th className="p-1.5">Bill No</th><th className="p-1.5 text-right">Arrears ₹</th><th className="p-1.5 text-right">Total ₹</th>
               <th className="p-1.5 text-right">Paid ₹</th><th className="p-1.5">Mode</th><th className="p-1.5">Receipt</th>
               <th className="p-1.5 text-right">Balance ₹</th><th className="p-1.5">Status</th>
@@ -861,6 +868,8 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right">{num(r.used)}</td>
                 <td className="p-1.5 text-right">{rs(r.water)}</td>
                 <td className="p-1.5 text-right">{rs(r.meter)}</td>
+                <td className="p-1.5 text-right">{r.other ? money(r.other) : "—"}</td>
+                <td className="p-1.5 text-right">{r.fine ? money(r.fine) : "—"}</td>
                 <td className="p-1.5 text-right font-medium">{rs(r.thisBill)}</td>
                 <td className="p-1.5 font-mono text-[10px]">{r.billNo}</td>
                 <td className="p-1.5 text-right">{rs(r.arrears)}</td>
@@ -873,7 +882,7 @@ function Audit({ consumers, txns }) {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={18} className="p-6 text-center text-slate-400">No bills or payments in this month.</td></tr>
+              <tr><td colSpan={20} className="p-6 text-center text-slate-400">No bills or payments in this month.</td></tr>
             )}
           </tbody>
           {rows.length > 0 && (
@@ -883,6 +892,8 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right">{num(totals.used)}</td>
                 <td className="p-1.5 text-right">{money(totals.water)}</td>
                 <td className="p-1.5 text-right">{money(totals.meter)}</td>
+                <td className="p-1.5 text-right">{money(totals.other)}</td>
+                <td className="p-1.5 text-right">{money(totals.fine)}</td>
                 <td className="p-1.5 text-right">{money(totals.thisBill)}</td>
                 <td className="p-1.5"></td>
                 <td className="p-1.5"></td>
