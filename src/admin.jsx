@@ -843,6 +843,24 @@ function Audit({ consumers, txns }) {
         </Card>
       )}
 
+      {/* Bills collected this period — the bill numbers settled */}
+      {rows.filter((r) => r.paid > 0).length > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-semibold text-slate-700">
+            Bills collected ({periodLabel(ptype, activePeriod)}) — {rows.filter((r) => r.paid > 0).length}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {rows.filter((r) => r.paid > 0).map((r) => (
+              <span key={r.id} className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] text-slate-700">
+                <span className="font-mono">{r.c.consumerNo}</span>
+                {r.billNo && r.billNo !== "—" && <span className="text-slate-400"> · {r.billNo}</span>}
+                <span className="font-medium text-sky-700"> · {money(r.paid)}</span>
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card className="overflow-x-auto">
         <table className="w-full min-w-[1240px] text-left text-[11px]">
           <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
