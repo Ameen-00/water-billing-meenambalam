@@ -756,6 +756,12 @@ function Audit({ consumers, txns }) {
     ["Outstanding (now)", money(totals.outstanding)],
   ];
 
+  // Start → end bill-number and receipt range collected this period.
+  const paidRows = rows.filter((r) => r.paid > 0);
+  const byNum = (s) => parseInt(String(s).replace(/\D/g, ""), 10) || 0;
+  const billRange = paidRows.map((r) => r.billNo).filter((b) => b && b !== "—").sort((a, b) => byNum(a) - byNum(b));
+  const recRange = paidRows.map((r) => r.receiptNo).filter((x) => x && x !== "—").sort((a, b) => byNum(a) - byNum(b));
+
   return (
     <div className="space-y-3">
       {/* controls — not printed */}
@@ -843,14 +849,32 @@ function Audit({ consumers, txns }) {
         </Card>
       )}
 
-      {/* Bills collected this period — the bill numbers settled */}
-      {rows.filter((r) => r.paid > 0).length > 0 && (
+      {/* Bills collected this period — start→end range + the bill numbers settled */}
+      {paidRows.length > 0 && (
         <Card className="p-4">
-          <div className="mb-2 text-sm font-semibold text-slate-700">
-            Bills collected ({periodLabel(ptype, activePeriod)}) — {rows.filter((r) => r.paid > 0).length}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              Bills collected ({periodLabel(ptype, activePeriod)}) — {paidRows.length}
+            </span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {billRange.length > 0 && (
+                <span className="text-slate-500">Bill no.&nbsp;
+                  <b className="font-mono text-slate-800">{billRange[0]}</b>
+                  <span className="text-slate-400"> → </span>
+                  <b className="font-mono text-slate-800">{billRange[billRange.length - 1]}</b>
+                </span>
+              )}
+              {recRange.length > 0 && (
+                <span className="text-slate-500">Receipt&nbsp;
+                  <b className="font-mono text-slate-800">{recRange[0]}</b>
+                  <span className="text-slate-400"> → </span>
+                  <b className="font-mono text-slate-800">{recRange[recRange.length - 1]}</b>
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {rows.filter((r) => r.paid > 0).map((r) => (
+            {paidRows.map((r) => (
               <span key={r.id} className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] text-slate-700">
                 <span className="font-mono">{r.c.consumerNo}</span>
                 {r.billNo && r.billNo !== "—" && <span className="text-slate-400"> · {r.billNo}</span>}
