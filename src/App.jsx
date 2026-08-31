@@ -147,6 +147,20 @@ function AppInner() {
     }
   }
 
+  // Cancel a wrong payment: delete it. The balance/due goes back up on its own
+  // (balanceOf recomputes), so a mis-recorded payment can be undone and re-entered.
+  async function cancelPayment(consumer, txn) {
+    if (!txn || txn.type !== "payment") return;
+    try {
+      await db.deleteTransaction(txn.id);
+      setTxns((p) => p.filter((t) => t.id !== txn.id));
+      if (receipt?.data?.consumer?.id === consumer.id) setReceipt(null);
+      toast.success(`Payment ${txn.meta?.receiptNo || ""} cancelled`);
+    } catch (e) {
+      toast.error("Could not cancel the payment: " + e.message);
+    }
+  }
+
   // Re-open a past bill/receipt for printing again — no re-entering the reading.
   function reprintTxn(consumer, txn) {
     const m = txn.meta || {};
@@ -236,7 +250,7 @@ function AppInner() {
             {userRole === "admin" && role === "admin" ? (
               <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} onReprint={reprintTxn} onCancelBill={cancelBill} />
             ) : (
-              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} onReprint={reprintTxn} onCancelBill={cancelBill} />
+              <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} onReprint={reprintTxn} onCancelBill={cancelBill} onCancelPayment={cancelPayment} />
             )}
           </main>
         </div>
@@ -452,7 +466,7 @@ function ChangePasswordModal({ email, onClose }) {
 // ---------------------------------------------------------------------------
 // METER READER FLOW
 // ---------------------------------------------------------------------------
-function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint, onCancelBill }) {
+function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint, onCancelBill, onCancelPayment }) {
   const { t: tr } = useLang();
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
@@ -485,6 +499,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint, onC
         onPay={onPay}
         onReprint={onReprint}
         onCancelBill={onCancelBill}
+        onCancelPayment={onCancelPayment}
         onGenerate={(charge) => { onGenerate(selected, charge); setSelected(null); }}
       />
     );
@@ -647,7 +662,7 @@ function ReaderFlow({ consumers, txns, tariff, onGenerate, onPay, onReprint, onC
   );
 }
 
-function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay, onReprint, onCancelBill }) {
+function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onPay, onReprint, onCancelBill, onCancelPayment }) {
   const { t: tr } = useLang();
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
@@ -670,6 +685,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
   // Only the newest bill can be cancelled (so restoring the meter reading is safe).
   const lastBillId = [...txns].reverse().find((t) => t.type === "bill" && t.consumerId === consumer.id)?.id;
+  const lastPaymentId = [...txns].reverse().find((t) => t.type === "payment" && t.consumerId === consumer.id)?.id;
 
   // --- edge-case guards -------------------------------------------------
   // 1) Already billed this calendar month -> warn before making a second bill.
@@ -791,6 +807,7 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
           {recent.map((t) => {
             const canReprint = onReprint && t.meta?.snapshot;
             const canCancel = onCancelBill && t.type === "bill" && t.id === lastBillId;
+            const canCancelPay = onCancelPayment && t.type === "payment" && t.id === lastPaymentId;
             return (
               <div key={t.id} className="flex items-center justify-between gap-1 py-1">
                 <button
@@ -821,6 +838,15 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
                     className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
                   >
                     ✕ {tr("cancelBill")}
+                  </button>
+                )}
+                {canCancelPay && (
+                  <button
+                    type="button"
+                    onClick={() => { if (window.confirm("Cancel this payment? The amount goes back to what they owe.")) onCancelPayment(consumer, t); }}
+                    className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
+                  >
+                    ✕ Cancel payment
                   </button>
                 )}
               </div>
