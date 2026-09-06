@@ -836,11 +836,13 @@ function Audit({ consumers, txns }) {
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">Collected by charge ({periodLabel(ptype, activePeriod)}) — {collected.count} consumer(s)</span>
-            <span className="text-sm font-bold text-sky-600">{money(collected.total)}</span>
+            <span className="text-sm font-bold text-sky-600">
+              {money(collected.water + collected.meter + collected.other + collected.fine)}
+              {collected.advance > 0 && <span className="ml-1 text-[11px] font-normal text-slate-400">+ {money(collected.advance)} advance</span>}
+            </span>
           </div>
-          <div className={`grid grid-cols-2 gap-2 ${collected.advance > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
-            {[["Water", collected.water], ["Meter", collected.meter], ["Other", collected.other], ["Fine", collected.fine],
-              ...(collected.advance > 0 ? [["Advance", collected.advance]] : [])].map(([l, v]) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[["Water", collected.water], ["Meter", collected.meter], ["Other", collected.other], ["Fine", collected.fine]].map(([l, v]) => (
               <div key={l} className="rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-100">
                 <div className="text-[10px] uppercase tracking-wide text-sky-700">{l}</div>
                 <div className="text-sm font-bold text-slate-800">{money(v)}</div>
