@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, duesBreakdown, matchesConsumer, applyExtras,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, duesBreakdown, splitPaidAmount, consumerCharges, matchesConsumer, applyExtras,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -169,19 +169,19 @@ function AppInner() {
     else setReceipt({ kind: "payment", data: { consumer, ...m.snapshot } });
   }
 
-  async function recordPayment(consumer, { amount, payerName, reference, mode, alliedFor }) {
+  async function recordPayment(consumer, { amount, split, payerName, reference, mode, alliedFor }) {
     try {
       const before = balanceOf(consumer, txns);
       const balanceAfter = before - amount;
       const receiptNo = docNo("R", seq.receipt + 1);
       const lastBill = [...txns].reverse().find((t) => t.consumerId === consumer.id && t.type === "bill");
       const receiptData = {
-        consumer, amount, payerName, reference, mode, alliedFor, receiptNo, balanceAfter, date: today(),
+        consumer, amount, split, payerName, reference, mode, alliedFor, receiptNo, balanceAfter, date: today(),
         spotBillNo: lastBill?.meta?.billNo || "—",
         lastCharge: lastBill?.meta?.charge || null,
       };
       const { consumer: _pc, ...snapshot } = receiptData;
-      const meta = { receiptNo, payerName, reference, mode, alliedFor, snapshot };
+      const meta = { receiptNo, payerName, reference, mode, alliedFor, split, snapshot };
       const txn = await db.insertTransaction({ consumerId: consumer.id, type: "payment", amount, date: today(), meta });
       setTxns((p) => [...p, txn]);
       // Paid up in full → clear the unpaid fine so the +₹5/month stops.
@@ -259,6 +259,7 @@ function AppInner() {
           <PaymentModal
             consumer={paying}
             balance={balanceOf(paying, txns)}
+            txns={txns}
             onClose={() => setPaying(null)}
             onConfirm={(payload) => { recordPayment(paying, payload); setPaying(null); }}
           />
@@ -994,13 +995,19 @@ function Line({ l, v, bold }) {
 // ---------------------------------------------------------------------------
 // PAYMENT MODAL
 // ---------------------------------------------------------------------------
-function PaymentModal({ consumer, balance, onClose, onConfirm }) {
-  const [amount, setAmount] = useState(String(Math.max(0, balance)));
+function PaymentModal({ consumer, balance, txns, onClose, onConfirm }) {
+  // Suggest a split of the current due (this-month bill first); reader can edit.
+  const suggested = splitPaidAmount(consumerCharges(consumer, txns || []), Math.max(0, balance));
+  const [water, setWater] = useState(String(suggested.water || 0));
+  const [meter, setMeter] = useState(String(suggested.meter || 0));
+  const [fine, setFine] = useState(String(suggested.fine || 0));
+  const [other, setOther] = useState(String(suggested.other || 0));
   const [payerName, setPayerName] = useState(consumer.name);
   const [reference, setReference] = useState("");
   const [alliedFor, setAlliedFor] = useState("");
   const [mode, setMode] = useState("Cash");
-  const value = Number(amount) || 0;
+  const nW = Number(water) || 0, nM = Number(meter) || 0, nF = Number(fine) || 0, nO = Number(other) || 0;
+  const value = nW + nM + nF + nO;
   const after = balance - value;
 
   return (
@@ -1011,9 +1018,19 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
       </div>
 
       <div className="space-y-3">
-        <Field label="Amount received">
-          <input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass + " text-lg"} autoFocus />
-        </Field>
+        <div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Split the payment (edit as needed)</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Water ₹"><input type="number" inputMode="numeric" value={water} onChange={(e) => setWater(e.target.value)} className={inputClass} autoFocus /></Field>
+            <Field label="Meter ₹"><input type="number" inputMode="numeric" value={meter} onChange={(e) => setMeter(e.target.value)} className={inputClass} /></Field>
+            <Field label="Fine ₹"><input type="number" inputMode="numeric" value={fine} onChange={(e) => setFine(e.target.value)} className={inputClass} /></Field>
+            <Field label="Other ₹"><input type="number" inputMode="numeric" value={other} onChange={(e) => setOther(e.target.value)} className={inputClass} /></Field>
+          </div>
+        </div>
+        <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm ring-1 ring-emerald-200">
+          <span className="text-slate-600">Total received (Water + Meter + Fine + Other)</span>
+          <span className="text-lg font-bold text-emerald-700">{money(value)}</span>
+        </div>
 
         <div className="grid grid-cols-3 gap-2">
           {["Cash", "UPI", "Bank"].map((m) => (
@@ -1050,7 +1067,7 @@ function PaymentModal({ consumer, balance, onClose, onConfirm }) {
 
       <div className="mt-4 flex gap-2">
         <Button variant="ghost" className="flex-1" onClick={onClose}>Cancel</Button>
-        <Button variant="gold" className="flex-1" disabled={value <= 0} onClick={() => onConfirm({ amount: value, payerName: payerName.trim() || consumer.name, reference: reference.trim(), mode, alliedFor: alliedFor.trim() })}>
+        <Button variant="gold" className="flex-1" disabled={value <= 0} onClick={() => onConfirm({ amount: value, split: { water: nW, meter: nM, fine: nF, other: nO }, payerName: payerName.trim() || consumer.name, reference: reference.trim(), mode, alliedFor: alliedFor.trim() })}>
           Confirm & Print Receipt
         </Button>
       </div>

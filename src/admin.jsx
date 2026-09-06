@@ -736,18 +736,25 @@ function Audit({ consumers, txns }) {
   // Collected THIS PERIOD, split by charge (this-month bill first, then old dues).
   const collected = useMemo(() => {
     const agg = { water: 0, meter: 0, other: 0, fine: 0, advance: 0, total: 0, count: 0 };
-    const paidBy = new Map();
+    const seen = new Set();
     for (const t of txns) {
       if (t.type !== "payment") continue;
       if ((t.createdAt || "").slice(0, keyLen) !== activePeriod) continue;
-      paidBy.set(t.consumerId, (paidBy.get(t.consumerId) || 0) + t.amount);
-    }
-    for (const [cid, paid] of paidBy) {
-      const c = consumerById[cid];
-      if (!c || paid <= 0) continue;
-      const s = splitPaidAmount(consumerCharges(c, txns), paid);
-      agg.water += s.water; agg.meter += s.meter; agg.other += s.other; agg.fine += s.fine; agg.advance += s.advance;
-      agg.total += paid; agg.count += 1;
+      const c = consumerById[t.consumerId];
+      if (!c || t.amount <= 0) continue;
+      agg.total += t.amount;
+      if (t.meta && t.meta.split) {
+        // Reader-entered split (new payments) — use it exactly.
+        const s = t.meta.split;
+        const w = Number(s.water) || 0, m = Number(s.meter) || 0, o = Number(s.other) || 0, f = Number(s.fine) || 0;
+        agg.water += w; agg.meter += m; agg.other += o; agg.fine += f;
+        agg.advance += Math.max(0, t.amount - (w + m + o + f));
+      } else {
+        // Older payments without a stored split — fall back to auto-split.
+        const s = splitPaidAmount(consumerCharges(c, txns), t.amount);
+        agg.water += s.water; agg.meter += s.meter; agg.other += s.other; agg.fine += s.fine; agg.advance += s.advance;
+      }
+      if (!seen.has(t.consumerId)) { seen.add(t.consumerId); agg.count += 1; }
     }
     return agg;
   }, [txns, activePeriod, keyLen, consumerById]);
