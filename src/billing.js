@@ -281,9 +281,18 @@ export function duesBreakdown(consumer, txns) {
     if (paid >= it.total) { paid -= it.total; it.status = "paid"; it.remain = { water: 0, meter: 0, other: 0, fine: 0 }; it.remainTotal = 0; }
     else if (paid <= 0) { it.status = "unpaid"; it.remain = { ...it.comp }; it.remainTotal = it.total; }
     else {
-      const remainTotal = it.total - paid; const ratio = remainTotal / it.total;
-      it.remain = { water: round(it.comp.water * ratio), meter: round(it.comp.meter * ratio), other: round(it.comp.other * ratio), fine: round(it.comp.fine * ratio) };
-      it.remainTotal = remainTotal; it.status = "partial"; paid = 0;
+      // Partial: the payment covered water->meter->other->fine in order; the
+      // remaining is comp minus what was covered (exact, stays a multiple of 5).
+      let p = paid;
+      const cov = { water: 0, meter: 0, other: 0, fine: 0 };
+      for (const k of ["water", "meter", "other", "fine"]) {
+        const take = Math.min(p, Number(it.comp[k]) || 0); cov[k] += take; p -= take;
+      }
+      it.remain = {
+        water: (it.comp.water || 0) - cov.water, meter: (it.comp.meter || 0) - cov.meter,
+        other: (it.comp.other || 0) - cov.other, fine: (it.comp.fine || 0) - cov.fine,
+      };
+      it.remainTotal = it.total - paid; it.status = "partial"; paid = 0;
     }
   }
 
@@ -302,16 +311,18 @@ export function duesBreakdown(consumer, txns) {
 export function splitPaidAmount(charges, amount) {
   const out = { water: 0, meter: 0, other: 0, fine: 0 };
   let left = Math.round(Number(amount) || 0);
+  const keys = ["water", "meter", "other", "fine"];
+  // Fill each component fully in order (water first) rather than proportionally,
+  // so the split always sums EXACTLY to the amount and — because charges and
+  // payments are multiples of 5 — every component stays a multiple of 5.
   for (const c of charges) {
     if (left <= 0) break;
-    const w = Number(c.water) || 0, m = Number(c.meter) || 0, o = Number(c.other) || 0, f = Number(c.fine) || 0;
-    const total = w + m + o + f;
-    if (total <= 0) continue;
-    const take = Math.min(left, total);
-    const r = take / total;
-    out.water += Math.round(w * r); out.meter += Math.round(m * r);
-    out.other += Math.round(o * r); out.fine += Math.round(f * r);
-    left -= take;
+    for (const k of keys) {
+      if (left <= 0) break;
+      const take = Math.min(left, Number(c[k]) || 0);
+      out[k] += take;
+      left -= take;
+    }
   }
   return out;
 }
