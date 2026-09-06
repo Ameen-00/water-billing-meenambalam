@@ -998,6 +998,7 @@ function Line({ l, v, bold }) {
 function PaymentModal({ consumer, balance, txns, onClose, onConfirm }) {
   // Suggest a split of the current due (this-month bill first); reader can edit.
   const suggested = splitPaidAmount(consumerCharges(consumer, txns || []), Math.max(0, balance));
+  const owed = duesBreakdown(consumer, txns || []).byComponent; // what is owed per charge (reference)
   const [water, setWater] = useState(String(suggested.water || 0));
   const [meter, setMeter] = useState(String(suggested.meter || 0));
   const [fine, setFine] = useState(String(suggested.fine || 0));
@@ -1018,6 +1019,18 @@ function PaymentModal({ consumer, balance, txns, onClose, onConfirm }) {
       </div>
 
       <div className="space-y-3">
+        <div className="rounded-xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">Due breakdown (for reference)</div>
+          <div className="grid grid-cols-4 gap-1 text-center">
+            {[["Water", owed.water], ["Meter", owed.meter], ["Fine", owed.fine], ["Other", owed.other]].map(([lbl, amt]) => (
+              <div key={lbl} className="rounded-lg bg-white/70 py-1">
+                <div className="text-[10px] uppercase text-slate-400">{lbl}</div>
+                <div className="text-sm font-bold text-slate-700">{money(amt || 0)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div>
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Split the payment (edit as needed)</div>
           <div className="grid grid-cols-2 gap-2">
