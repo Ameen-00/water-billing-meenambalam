@@ -677,11 +677,19 @@ function Audit({ consumers, txns }) {
           }, c.openingArrears);
           total = arrears + (ch.currentCharge || 0);
         } else if (rec.paid > 0) {
-          // Payment-only row: split the payment (this-month bill first) so the
-          // charge columns aren't blank, show what was owed, and name the bill paid.
-          const s = splitPaidAmount(consumerCharges(c, txns), rec.paid);
-          water = s.water; meter = s.meter; other = s.other; fine = s.fine;
-          arrears = balanceOf(c, txns) + rec.paid;   // owed before this payment
+          // Payment-only row: show the FULL dues breakdown they owe (old dues +
+          // every bill's water/meter/other/fine) so all components show (incl.
+          // Fine) and Water+Meter+Other+Fine equals the Total owed.
+          const dm = c.dueMeta || {};
+          water = Number(dm.water) || 0; meter = Number(dm.meter) || 0;
+          other = Number(dm.other) || 0; fine = Number(dm.fine) || 0;
+          for (const b of txns) {
+            if (b.consumerId !== cid || b.type !== "bill") continue;
+            const bch = (b.meta && b.meta.charge) || {};
+            water += Number(bch.waterCharge) || 0; meter += Number(bch.meterFee) || 0;
+            other += Number(bch.other) || 0; fine += Number(bch.fine) || 0;
+          }
+          arrears = balanceOf(c, txns) + rec.paid;   // total owed before this payment
           total = arrears;
           const lastBill = txns
             .filter((t) => t.consumerId === cid && t.type === "bill")
