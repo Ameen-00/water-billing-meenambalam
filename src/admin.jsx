@@ -652,9 +652,15 @@ function Audit({ consumers, txns }) {
     const map = new Map();
     for (const t of txns) {
       if ((t.createdAt || "").slice(0, keyLen) !== activePeriod) continue;
-      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null, billDate: "", payDate: "" };
+      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null, billDate: "", payDate: "", paidSplit: { water: 0, meter: 0, other: 0, fine: 0 } };
       if (t.type === "bill") { rec.bill = t; rec.billDate = t.date; }
-      else { rec.paid += t.amount; rec.payMeta = t.meta; rec.payDate = t.date; }
+      else {
+        rec.paid += t.amount; rec.payMeta = t.meta; rec.payDate = t.date;
+        // How this payment was split (reader-entered, else auto-split).
+        const s = (t.meta && t.meta.split) ? t.meta.split : splitPaidAmount(consumerCharges(consumerById[t.consumerId] || {}, txns), t.amount);
+        rec.paidSplit.water += Number(s.water) || 0; rec.paidSplit.meter += Number(s.meter) || 0;
+        rec.paidSplit.other += Number(s.other) || 0; rec.paidSplit.fine += Number(s.fine) || 0;
+      }
       map.set(t.consumerId, rec);
     }
     const rows = Array.from(map.entries())
@@ -705,6 +711,7 @@ function Audit({ consumers, txns }) {
           water, meter, other, fine, thisBill: ch.currentCharge, season: ch.season || "",
           arrears, total,
           paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
+          paidWater: rec.paidSplit.water, paidMeter: rec.paidSplit.meter, paidOther: rec.paidSplit.other, paidFine: rec.paidSplit.fine,
           balanceNow: balanceOf(c, txns), status,
         };
       })
@@ -714,8 +721,10 @@ function Audit({ consumers, txns }) {
       used: t.used + (r.used || 0), water: t.water + (r.water || 0), meter: t.meter + (r.meter || 0),
       other: t.other + (r.other || 0), fine: t.fine + (r.fine || 0),
       thisBill: t.thisBill + (r.thisBill || 0), total: t.total + (r.total || 0), paid: t.paid + (r.paid || 0),
+      paidWater: t.paidWater + (r.paidWater || 0), paidMeter: t.paidMeter + (r.paidMeter || 0),
+      paidOther: t.paidOther + (r.paidOther || 0), paidFine: t.paidFine + (r.paidFine || 0),
       outstanding: t.outstanding + Math.max(0, r.balanceNow || 0),
-    }), { used: 0, water: 0, meter: 0, other: 0, fine: 0, thisBill: 0, total: 0, paid: 0, outstanding: 0 });
+    }), { used: 0, water: 0, meter: 0, other: 0, fine: 0, thisBill: 0, total: 0, paid: 0, paidWater: 0, paidMeter: 0, paidOther: 0, paidFine: 0, outstanding: 0 });
     return { rows, totals };
   }, [txns, activePeriod, keyLen, consumerById]);
 
@@ -776,6 +785,8 @@ function Audit({ consumers, txns }) {
   const byNum = (s) => parseInt(String(s).replace(/\D/g, ""), 10) || 0;
   const billRange = paidRows.map((r) => r.billNo).filter((b) => b && b !== "—").sort((a, b) => byNum(a) - byNum(b));
   const recRange = paidRows.map((r) => r.receiptNo).filter((x) => x && x !== "—").sort((a, b) => byNum(a) - byNum(b));
+  // Reading columns (Prev/Curr/Used) only matter on Monthly/Yearly; hide on Daily (collection days have no readings).
+  const showReading = ptype !== "day";
 
   return (
     <div className="space-y-3">
@@ -902,15 +913,17 @@ function Audit({ consumers, txns }) {
       )}
 
       <Card className="overflow-x-auto">
-        <table className="w-full min-w-[1240px] text-left text-[11px]">
+        <table className="w-full min-w-[1440px] text-left text-[11px]">
           <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
             <tr>
               <th className="p-1.5">No</th><th className="p-1.5">Name</th><th className="p-1.5">Meter No</th><th className="p-1.5">Date</th>
-              <th className="p-1.5 text-right">Prev</th><th className="p-1.5 text-right">Curr</th><th className="p-1.5 text-right">Used L</th>
-              <th className="p-1.5 text-right">Water ₹</th><th className="p-1.5 text-right">M.Fee ₹</th>
-              <th className="p-1.5 text-right">Other ₹</th><th className="p-1.5 text-right">Fine ₹</th><th className="p-1.5 text-right">Bill ₹</th>
+              {showReading && (<><th className="p-1.5 text-right">Prev</th><th className="p-1.5 text-right">Curr</th><th className="p-1.5 text-right">Used L</th></>)}
+              <th className="p-1.5 text-right">Due Water</th><th className="p-1.5 text-right">Due Meter</th>
+              <th className="p-1.5 text-right">Due Other</th><th className="p-1.5 text-right">Due Fine</th><th className="p-1.5 text-right">Bill ₹</th>
               <th className="p-1.5">Bill No</th><th className="p-1.5 text-right">Arrears ₹</th><th className="p-1.5 text-right">Total ₹</th>
-              <th className="p-1.5 text-right">Paid ₹</th><th className="p-1.5">Mode</th><th className="p-1.5">Receipt</th>
+              <th className="p-1.5 text-right">Paid ₹</th>
+              <th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Water</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Meter</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Other</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Fine</th>
+              <th className="p-1.5">Mode</th><th className="p-1.5">Receipt</th>
               <th className="p-1.5 text-right">Balance ₹</th><th className="p-1.5">Status</th>
             </tr>
           </thead>
@@ -921,9 +934,7 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5">{r.c.name}</td>
                 <td className="p-1.5 font-mono text-[10px]">{r.meterNo}</td>
                 <td className="p-1.5 whitespace-nowrap">{r.date}</td>
-                <td className="p-1.5 text-right">{num(r.prev)}</td>
-                <td className="p-1.5 text-right">{num(r.curr)}</td>
-                <td className="p-1.5 text-right">{num(r.used)}</td>
+                {showReading && (<><td className="p-1.5 text-right">{num(r.prev)}</td><td className="p-1.5 text-right">{num(r.curr)}</td><td className="p-1.5 text-right">{num(r.used)}</td></>)}
                 <td className="p-1.5 text-right">{rs(r.water)}</td>
                 <td className="p-1.5 text-right">{rs(r.meter)}</td>
                 <td className="p-1.5 text-right">{r.other ? money(r.other) : "—"}</td>
@@ -933,6 +944,10 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right">{rs(r.arrears)}</td>
                 <td className="p-1.5 text-right">{rs(r.total)}</td>
                 <td className="p-1.5 text-right text-sky-700">{r.paid ? money(r.paid) : "—"}</td>
+                <td className="p-1.5 text-right bg-sky-50">{r.paidWater ? money(r.paidWater) : "—"}</td>
+                <td className="p-1.5 text-right bg-sky-50">{r.paidMeter ? money(r.paidMeter) : "—"}</td>
+                <td className="p-1.5 text-right bg-sky-50">{r.paidOther ? money(r.paidOther) : "—"}</td>
+                <td className="p-1.5 text-right bg-sky-50">{r.paidFine ? money(r.paidFine) : "—"}</td>
                 <td className="p-1.5">{r.mode || "—"}</td>
                 <td className="p-1.5 font-mono text-[10px]">{r.receiptNo || "—"}</td>
                 <td className="p-1.5 text-right font-medium">{money(r.balanceNow)}</td>
@@ -940,14 +955,14 @@ function Audit({ consumers, txns }) {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={20} className="p-6 text-center text-slate-400">No bills or payments in this month.</td></tr>
+              <tr><td colSpan={showReading ? 24 : 21} className="p-6 text-center text-slate-400">No bills or payments in this period.</td></tr>
             )}
           </tbody>
           {rows.length > 0 && (
             <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
               <tr>
-                <td className="p-1.5" colSpan={6}>TOTAL ({rows.length})</td>
-                <td className="p-1.5 text-right">{num(totals.used)}</td>
+                <td className="p-1.5" colSpan={showReading ? 6 : 4}>TOTAL ({rows.length})</td>
+                {showReading && <td className="p-1.5 text-right">{num(totals.used)}</td>}
                 <td className="p-1.5 text-right">{money(totals.water)}</td>
                 <td className="p-1.5 text-right">{money(totals.meter)}</td>
                 <td className="p-1.5 text-right">{money(totals.other)}</td>
@@ -957,6 +972,10 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5"></td>
                 <td className="p-1.5 text-right">{money(totals.total)}</td>
                 <td className="p-1.5 text-right text-sky-700">{money(totals.paid)}</td>
+                <td className="p-1.5 text-right bg-sky-50">{money(totals.paidWater)}</td>
+                <td className="p-1.5 text-right bg-sky-50">{money(totals.paidMeter)}</td>
+                <td className="p-1.5 text-right bg-sky-50">{money(totals.paidOther)}</td>
+                <td className="p-1.5 text-right bg-sky-50">{money(totals.paidFine)}</td>
                 <td className="p-1.5"></td><td className="p-1.5"></td>
                 <td className="p-1.5 text-right">{money(totals.outstanding)}</td>
                 <td className="p-1.5"></td>
