@@ -98,7 +98,7 @@ export function Modal({ title, subtitle, onClose, children }) {
       onClick={onClose}
     >
       <div
-        className="animate-slide-up w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+        className="animate-slide-up max-h-[92dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-5 shadow-2xl sm:max-h-[88vh] sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between">
