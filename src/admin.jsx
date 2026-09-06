@@ -727,7 +727,7 @@ function Audit({ consumers, txns }) {
 
   // Collected THIS PERIOD, split by charge (this-month bill first, then old dues).
   const collected = useMemo(() => {
-    const agg = { water: 0, meter: 0, other: 0, fine: 0, total: 0, count: 0 };
+    const agg = { water: 0, meter: 0, other: 0, fine: 0, advance: 0, total: 0, count: 0 };
     const paidBy = new Map();
     for (const t of txns) {
       if (t.type !== "payment") continue;
@@ -738,7 +738,7 @@ function Audit({ consumers, txns }) {
       const c = consumerById[cid];
       if (!c || paid <= 0) continue;
       const s = splitPaidAmount(consumerCharges(c, txns), paid);
-      agg.water += s.water; agg.meter += s.meter; agg.other += s.other; agg.fine += s.fine;
+      agg.water += s.water; agg.meter += s.meter; agg.other += s.other; agg.fine += s.fine; agg.advance += s.advance;
       agg.total += paid; agg.count += 1;
     }
     return agg;
@@ -838,8 +838,9 @@ function Audit({ consumers, txns }) {
             <span className="text-sm font-semibold text-slate-700">Collected by charge ({periodLabel(ptype, activePeriod)}) — {collected.count} consumer(s)</span>
             <span className="text-sm font-bold text-sky-600">{money(collected.total)}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[["Water", collected.water], ["Meter", collected.meter], ["Other", collected.other], ["Fine", collected.fine]].map(([l, v]) => (
+          <div className={`grid grid-cols-2 gap-2 ${collected.advance > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+            {[["Water", collected.water], ["Meter", collected.meter], ["Other", collected.other], ["Fine", collected.fine],
+              ...(collected.advance > 0 ? [["Advance", collected.advance]] : [])].map(([l, v]) => (
               <div key={l} className="rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-100">
                 <div className="text-[10px] uppercase tracking-wide text-sky-700">{l}</div>
                 <div className="text-sm font-bold text-slate-800">{money(v)}</div>

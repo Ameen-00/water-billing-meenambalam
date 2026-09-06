@@ -309,7 +309,7 @@ export function duesBreakdown(consumer, txns) {
 // e.g. this-month bill first, then older dues), by component. Each charge is
 // { water, meter, other, fine }. Returns how much of the payment went to each.
 export function splitPaidAmount(charges, amount) {
-  const out = { water: 0, meter: 0, other: 0, fine: 0 };
+  const out = { water: 0, meter: 0, other: 0, fine: 0, advance: 0 };
   let left = Math.round(Number(amount) || 0);
   const keys = ["water", "meter", "other", "fine"];
   // Fill each component fully in order (water first) rather than proportionally,
@@ -324,6 +324,9 @@ export function splitPaidAmount(charges, amount) {
       left -= take;
     }
   }
+  // Anything paid beyond what's owed is advance/credit (not a charge) — keeping
+  // it here means water+meter+other+fine+advance always equals the amount paid.
+  out.advance = left;
   return out;
 }
 
