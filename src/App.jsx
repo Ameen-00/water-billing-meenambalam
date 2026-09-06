@@ -1007,8 +1007,10 @@ function PaymentModal({ consumer, balance, txns, onClose, onConfirm }) {
   const [reference, setReference] = useState("");
   const [alliedFor, setAlliedFor] = useState("");
   const [mode, setMode] = useState("Cash");
-  const nW = Number(water) || 0, nM = Number(meter) || 0, nF = Number(fine) || 0, nO = Number(other) || 0;
-  const value = nW + nM + nF + nO;
+  const [advance, setAdvance] = useState("0");
+  const nW = Number(water) || 0, nM = Number(meter) || 0, nF = Number(fine) || 0, nO = Number(other) || 0, nAdv = Number(advance) || 0;
+  const dueValue = nW + nM + nF + nO;        // paid against charges
+  const value = dueValue + nAdv;             // total cash received (charges + advance)
   const after = balance - value;
 
   return (
@@ -1040,8 +1042,13 @@ function PaymentModal({ consumer, balance, txns, onClose, onConfirm }) {
             <Field label="Other ₹"><input type="number" inputMode="numeric" value={other} onChange={(e) => setOther(e.target.value)} className={inputClass} /></Field>
           </div>
         </div>
+        <div className="rounded-xl bg-sky-50 px-3 py-2 ring-1 ring-sky-200">
+          <Field label="Advance ₹" hint="extra paid beyond dues — kept as credit for the next bill">
+            <input type="number" inputMode="numeric" value={advance} onChange={(e) => setAdvance(e.target.value)} className={inputClass} />
+          </Field>
+        </div>
         <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm ring-1 ring-emerald-200">
-          <span className="text-slate-600">Total received (Water + Meter + Fine + Other)</span>
+          <span className="text-slate-600">Total received (Water + Meter + Fine + Other + Advance)</span>
           <span className="text-lg font-bold text-emerald-700">{money(value)}</span>
         </div>
 

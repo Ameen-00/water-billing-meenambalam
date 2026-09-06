@@ -715,7 +715,10 @@ function Audit({ consumers, txns }) {
           balanceNow: balanceOf(c, txns), status,
         };
       })
-      .filter((r) => r.c)
+      // Daily view = collections made that day only (a bill with no same-day
+      // payment — e.g. the one-time opening import batch — is hidden). Monthly
+      // and Yearly still show every bill.
+      .filter((r) => r.c && (ptype !== "day" || r.paid > 0))
       .sort((a, b) => Number(String(a.c.consumerNo).replace(/\D/g, "")) - Number(String(b.c.consumerNo).replace(/\D/g, "")));
     const totals = rows.reduce((t, r) => ({
       used: t.used + (r.used || 0), water: t.water + (r.water || 0), meter: t.meter + (r.meter || 0),
