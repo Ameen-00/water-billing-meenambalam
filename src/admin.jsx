@@ -848,8 +848,8 @@ function Audit({ consumers, txns }) {
           </div>
           {collected.advance > 0 && (
             <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-100">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Advance / credit (paid ahead)</span>
-              <span className="text-sm font-bold text-amber-800">{money(collected.advance)}</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Advance / credit (paid ahead, not in the total)</span>
+              <span className="text-sm font-bold text-amber-800">+ {money(collected.advance)}</span>
             </div>
           )}
         </Card>
