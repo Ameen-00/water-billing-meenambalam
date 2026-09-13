@@ -107,7 +107,10 @@ function AppInner() {
         await db.updatePrevReading(consumer.id, newPrev);
         setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
       } else if (charge.metered && charge.currentReading != null) {
-        const newPrev = Math.max(consumer.prevReading, charge.currentReading);
+        // On a meter reset the new unit counts from 0, so the baseline must drop to
+        // the new reading. Otherwise Math.max keeps the OLD meter's higher number and
+        // the customer stays stuck on the minimum until the new meter climbs past it.
+        const newPrev = charge.meterReset ? charge.currentReading : Math.max(consumer.prevReading, charge.currentReading);
         await db.updatePrevReading(consumer.id, newPrev);
         setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
       }
