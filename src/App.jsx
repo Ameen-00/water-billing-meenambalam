@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, duesBreakdown, splitPaidAmount, consumerCharges, matchesConsumer, applyExtras,
+  scheme, initialTariff, money, balanceOf, calculateCharge, docNo, categoryLabel, minimumCharge, arrearsBreakdown, duesBreakdown, splitPaidAmount, consumerCharges, matchesConsumer, applyExtras, pendingLocks,
 } from "./billing";
 import { supabase, isConfigured } from "./lib/supabase";
 import * as db from "./lib/db";
@@ -100,12 +100,11 @@ function AppInner() {
       const txn = await db.insertTransaction({ consumerId: consumer.id, type: "bill", amount: charge.currentCharge, date: today(), meta });
       setTxns((p) => [...p, txn]);
       // Advance the meter baseline:
-      //  - owner away  -> add the assumed litres (+7,000)
+      //  - owner away  -> DON'T advance; the lock is trued up at the next real reading
+      //                   (baseline stays put, so the next reading captures the true gap)
       //  - normal read -> move to the new reading, but never DOWN (keeps pre-paid credit)
       if (charge.absent) {
-        const newPrev = consumer.prevReading + (charge.assumedAdvance || 0);
-        await db.updatePrevReading(consumer.id, newPrev);
-        setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, prevReading: newPrev } : c)));
+        // no baseline change — pendingReconcile handles it at the next reading
       } else if (charge.metered && charge.currentReading != null) {
         // On a meter reset the new unit counts from 0, so the baseline must drop to
         // the new reading. Otherwise Math.max keeps the OLD meter's higher number and
@@ -137,7 +136,9 @@ function AppInner() {
       await db.deleteTransaction(txn.id);
       setTxns((p) => p.filter((t) => t.id !== txn.id));
       let restore = null;
-      if (ch.absent) restore = consumer.prevReading - (ch.assumedAdvance || 0);
+      // New locks don't advance the baseline (nothing to restore). Old-style locks did
+      // (+assumedAdvance), so only those roll back. Normal bills restore their prevReading.
+      if (ch.absent) restore = ch.assumedAdvance ? consumer.prevReading - ch.assumedAdvance : null;
       else if (ch.metered && ch.prevReading != null) restore = ch.prevReading;
       if (restore != null && restore !== consumer.prevReading) {
         await db.updatePrevReading(consumer.id, restore);
@@ -676,7 +677,12 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const [other, setOther] = useState("");
   const [otherReason, setOtherReason] = useState("");
   const extras = { fine, other, otherReason };
-  const charge = applyExtras(calculateCharge(consumer, reading, tariff, reset, undefined, reset ? Number(resetStart) || 0 : 0), extras);
+  // Door-lock true-up: if the last month(s) were "owner not home", subtract one slab-0
+  // cushion per locked month from this real reading (they were paid via their minimums).
+  const locks = pendingLocks(consumer, txns);
+  const perLock = Number((tariff.slabs && tariff.slabs[0] && tariff.slabs[0].upTo) ?? 7000);
+  const lockCushion = reset ? 0 : locks * perLock;
+  const charge = applyExtras(calculateCharge(consumer, reading, tariff, reset, undefined, reset ? Number(resetStart) || 0 : 0, lockCushion), extras);
   const totalDue = arrears + charge.currentCharge;
   const arrInfo = arrearsBreakdown(consumer, arrears);
   const oldSplit = duesBreakdown(consumer, txns);
@@ -893,6 +899,11 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
                 className={inputClass + " text-lg"} autoFocus
               />
             </Field>
+            {!reset && locks > 0 && (
+              <p className="rounded-lg bg-sky-50 px-2 py-1 text-xs text-sky-700 ring-1 ring-sky-200">
+                🔄 {locks} {tr("lockReconcile")} (−{(locks * perLock).toLocaleString("en-IN")} L)
+              </p>
+            )}
             {readingLow && (
               <p className="text-xs text-amber-700">{tr("readingLowMin")}</p>
             )}

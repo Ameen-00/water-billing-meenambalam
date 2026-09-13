@@ -84,7 +84,23 @@ export function isJanMay(date = new Date()) {
 }
 
 // -- THE CORE CALCULATION (split band by band) ----------------------------
-export function calculateCharge(consumer, currentReading, tariff, meterReset = false, billDate = new Date(), resetStart = 0) {
+// Count trailing door-lock ("owner not home") months awaiting reconciliation — the
+// most recent bills that were locked and left un-advanced. The next real reading
+// trues them up: each holds up to one slab-0 of litres, already paid via its minimum.
+export function pendingLocks(consumer, txns) {
+  const bills = (txns || [])
+    .filter((t) => t.consumerId === consumer.id && t.type === "bill")
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  let count = 0;
+  for (const b of bills) {
+    const ch = (b.meta && b.meta.charge) || {};
+    if (ch.absent && ch.pendingReconcile) count++;
+    else break; // stop at the first real (non-locked) bill
+  }
+  return count;
+}
+
+export function calculateCharge(consumer, currentReading, tariff, meterReset = false, billDate = new Date(), resetStart = 0, lockedCushion = 0) {
   const t = { ...initialTariff, ...(tariff || {}) };
   const meterFee = Number(t.meterFee ?? 5);
 
@@ -107,8 +123,18 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
     // On a meter replacement, bill the usage on the NEW meter = current − its start
     // reading (the reading at install/testing, often 0 but not always).
     const rs = Math.max(0, Number(resetStart) || 0);
-    consumption = meterReset ? Math.max(0, curr - rs) : Math.max(0, curr - consumer.prevReading);
-    if (meterReset) prev = rs;
+    // Door-lock true-up: subtract the cushion already covered by the locked months'
+    // minimum bills (7,000 L each), so only the excess is billed this reading.
+    const cushion = Math.max(0, Number(lockedCushion) || 0);
+    if (meterReset) {
+      consumption = Math.max(0, curr - rs);
+      prev = rs;
+    } else {
+      consumption = Math.max(0, curr - consumer.prevReading - cushion);
+      // After a lock true-up, show prev so that prev→curr matches the billed litres
+      // (a clean bill), while the stored baseline still advances to the real reading.
+      if (cushion > 0) prev = curr - consumption;
+    }
   }
 
   const parts = [];
@@ -187,18 +213,19 @@ export function applyExtras(charge, { fine = 0, other = 0, otherReason = "" } = 
   };
 }
 
-// "Owner not home" — charge the monthly minimum without a reading, and remember
-// how much to advance the meter baseline (the first slab's litres).
+// "Owner not home" — charge the monthly minimum without a reading. The baseline is
+// NOT advanced (no +7,000 guess); the lock is marked pendingReconcile and trued up at
+// the next real reading, which subtracts one cushion (slab-0 litres) per locked month.
 export function minimumCharge(tariff) {
   const t = { ...initialTariff, ...(tariff || {}) };
   const slab0 = (t.slabs && t.slabs[0]) || initialTariff.slabs[0];
   const water = Number(slab0.amount);
-  const assumed = Number(slab0.upTo);
+  const cushion = Number(slab0.upTo);
   const meterFee = Number(t.meterFee ?? 5);
   return {
-    metered: true, disconnected: false, absent: true, assumedAdvance: assumed, meterReset: false,
-    prevReading: null, currentReading: null, consumption: assumed,
-    parts: [{ label: "Owner not home (min)", detail: `up to ${assumed.toLocaleString("en-IN")} L assumed`, amount: water }],
+    metered: true, disconnected: false, absent: true, pendingReconcile: true, cushion, meterReset: false,
+    prevReading: null, currentReading: null, consumption: 0,
+    parts: [{ label: "Owner not home (min)", detail: "locked — trued up at next reading", amount: water }],
     waterCharge: water, meterFee, currentCharge: Math.round(water + meterFee), season: null,
   };
 }
