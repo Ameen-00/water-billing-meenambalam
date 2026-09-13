@@ -652,14 +652,17 @@ function Audit({ consumers, txns }) {
     const map = new Map();
     for (const t of txns) {
       if ((t.createdAt || "").slice(0, keyLen) !== activePeriod) continue;
-      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null, billDate: "", payDate: "", paidSplit: { water: 0, meter: 0, other: 0, fine: 0 } };
+      const rec = map.get(t.consumerId) || { bill: null, paid: 0, payMeta: null, billDate: "", payDate: "", paidSplit: { water: 0, meter: 0, other: 0, fine: 0, advance: 0 } };
       if (t.type === "bill") { rec.bill = t; rec.billDate = t.date; }
       else {
         rec.paid += t.amount; rec.payMeta = t.meta; rec.payDate = t.date;
         // How this payment was split (reader-entered, else auto-split).
         const s = (t.meta && t.meta.split) ? t.meta.split : splitPaidAmount(consumerCharges(consumerById[t.consumerId] || {}, txns), t.amount);
-        rec.paidSplit.water += Number(s.water) || 0; rec.paidSplit.meter += Number(s.meter) || 0;
-        rec.paidSplit.other += Number(s.other) || 0; rec.paidSplit.fine += Number(s.fine) || 0;
+        const sw = Number(s.water) || 0, sm = Number(s.meter) || 0, so = Number(s.other) || 0, sf = Number(s.fine) || 0;
+        rec.paidSplit.water += sw; rec.paidSplit.meter += sm;
+        rec.paidSplit.other += so; rec.paidSplit.fine += sf;
+        // Advance = amount paid beyond the charge split (explicit for stored splits, else the auto-split leftover).
+        rec.paidSplit.advance += (t.meta && t.meta.split) ? Math.max(0, t.amount - (sw + sm + so + sf)) : (Number(s.advance) || 0);
       }
       map.set(t.consumerId, rec);
     }
@@ -711,7 +714,7 @@ function Audit({ consumers, txns }) {
           water, meter, other, fine, thisBill: ch.currentCharge, season: ch.season || "",
           arrears, total,
           paid: rec.paid, mode: rec.payMeta?.mode || "", receiptNo: rec.payMeta?.receiptNo || "",
-          paidWater: rec.paidSplit.water, paidMeter: rec.paidSplit.meter, paidOther: rec.paidSplit.other, paidFine: rec.paidSplit.fine,
+          paidWater: rec.paidSplit.water, paidMeter: rec.paidSplit.meter, paidOther: rec.paidSplit.other, paidFine: rec.paidSplit.fine, paidAdvance: rec.paidSplit.advance,
           balanceNow: balanceOf(c, txns), status,
         };
       })
@@ -725,9 +728,9 @@ function Audit({ consumers, txns }) {
       other: t.other + (r.other || 0), fine: t.fine + (r.fine || 0),
       thisBill: t.thisBill + (r.thisBill || 0), total: t.total + (r.total || 0), paid: t.paid + (r.paid || 0),
       paidWater: t.paidWater + (r.paidWater || 0), paidMeter: t.paidMeter + (r.paidMeter || 0),
-      paidOther: t.paidOther + (r.paidOther || 0), paidFine: t.paidFine + (r.paidFine || 0),
+      paidOther: t.paidOther + (r.paidOther || 0), paidFine: t.paidFine + (r.paidFine || 0), paidAdvance: t.paidAdvance + (r.paidAdvance || 0),
       outstanding: t.outstanding + Math.max(0, r.balanceNow || 0),
-    }), { used: 0, water: 0, meter: 0, other: 0, fine: 0, thisBill: 0, total: 0, paid: 0, paidWater: 0, paidMeter: 0, paidOther: 0, paidFine: 0, outstanding: 0 });
+    }), { used: 0, water: 0, meter: 0, other: 0, fine: 0, thisBill: 0, total: 0, paid: 0, paidWater: 0, paidMeter: 0, paidOther: 0, paidFine: 0, paidAdvance: 0, outstanding: 0 });
     return { rows, totals };
   }, [txns, activePeriod, keyLen, consumerById]);
 
@@ -925,7 +928,7 @@ function Audit({ consumers, txns }) {
               <th className="p-1.5 text-right">Due Other</th><th className="p-1.5 text-right">Due Fine</th><th className="p-1.5 text-right">Bill ₹</th>
               <th className="p-1.5">Bill No</th><th className="p-1.5 text-right">Arrears ₹</th><th className="p-1.5 text-right">Total ₹</th>
               <th className="p-1.5 text-right">Paid ₹</th>
-              <th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Water</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Meter</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Other</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Fine</th>
+              <th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Water</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Meter</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Other</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Fine</th><th className="p-1.5 text-right bg-indigo-50 text-indigo-700">Advance</th>
               <th className="p-1.5">Mode</th><th className="p-1.5">Receipt</th>
               <th className="p-1.5 text-right">Balance ₹</th><th className="p-1.5">Status</th>
             </tr>
@@ -951,6 +954,7 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right bg-sky-50">{r.paidMeter ? money(r.paidMeter) : "—"}</td>
                 <td className="p-1.5 text-right bg-sky-50">{r.paidOther ? money(r.paidOther) : "—"}</td>
                 <td className="p-1.5 text-right bg-sky-50">{r.paidFine ? money(r.paidFine) : "—"}</td>
+                <td className="p-1.5 text-right bg-indigo-50 font-medium text-indigo-700">{r.paidAdvance ? money(r.paidAdvance) : "—"}</td>
                 <td className="p-1.5">{r.mode || "—"}</td>
                 <td className="p-1.5 font-mono text-[10px]">{r.receiptNo || "—"}</td>
                 <td className="p-1.5 text-right font-medium">{money(r.balanceNow)}</td>
@@ -958,7 +962,7 @@ function Audit({ consumers, txns }) {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={showReading ? 24 : 21} className="p-6 text-center text-slate-400">No bills or payments in this period.</td></tr>
+              <tr><td colSpan={showReading ? 25 : 22} className="p-6 text-center text-slate-400">No bills or payments in this period.</td></tr>
             )}
           </tbody>
           {rows.length > 0 && (
@@ -979,6 +983,7 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right bg-sky-50">{money(totals.paidMeter)}</td>
                 <td className="p-1.5 text-right bg-sky-50">{money(totals.paidOther)}</td>
                 <td className="p-1.5 text-right bg-sky-50">{money(totals.paidFine)}</td>
+                <td className="p-1.5 text-right bg-indigo-50 text-indigo-700">{money(totals.paidAdvance)}</td>
                 <td className="p-1.5"></td><td className="p-1.5"></td>
                 <td className="p-1.5 text-right">{money(totals.outstanding)}</td>
                 <td className="p-1.5"></td>
