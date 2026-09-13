@@ -670,12 +670,13 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const { t: tr } = useLang();
   const [reading, setReading] = useState("");
   const [reset, setReset] = useState(false);
+  const [resetStart, setResetStart] = useState("0"); // new meter's start reading (install/testing)
   // Fine auto-fills ₹5 for a consumer who already has an unpaid fine (reader can clear it).
   const [fine, setFine] = useState(consumer.fineDue > 0 ? "5" : "");
   const [other, setOther] = useState("");
   const [otherReason, setOtherReason] = useState("");
   const extras = { fine, other, otherReason };
-  const charge = applyExtras(calculateCharge(consumer, reading, tariff, reset), extras);
+  const charge = applyExtras(calculateCharge(consumer, reading, tariff, reset, undefined, reset ? Number(resetStart) || 0 : 0), extras);
   const totalDue = arrears + charge.currentCharge;
   const arrInfo = arrearsBreakdown(consumer, arrears);
   const oldSplit = duesBreakdown(consumer, txns);
@@ -867,15 +868,28 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
           </div>
         ) : consumer.metered ? (
           <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
-              <span className="text-slate-500">{tr("prevReading")}</span>
-              <span className="font-semibold">{reset ? "0" : consumer.prevReading}</span>
-            </div>
+            {reset ? (
+              <div className="rounded-xl bg-sky-50 px-3 py-2 ring-1 ring-sky-200">
+                <div className="mb-1 text-xs font-semibold text-sky-700">🔄 {tr("meterReset")}</div>
+                <Field label={tr("newMeterStart")} hint={tr("newMeterStartHint")}>
+                  <input
+                    type="number" inputMode="numeric" value={resetStart}
+                    onChange={(e) => setResetStart(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200">
+                <span className="text-slate-500">{tr("prevReading")}</span>
+                <span className="font-semibold">{consumer.prevReading}</span>
+              </div>
+            )}
             <Field label={tr("currReading")}>
               <input
                 type="number" inputMode="numeric" value={reading}
                 onChange={(e) => setReading(e.target.value)}
-                placeholder={`e.g. ${consumer.prevReading + 10}`}
+                placeholder={reset ? "e.g. 305" : `e.g. ${consumer.prevReading + 10}`}
                 className={inputClass + " text-lg"} autoFocus
               />
             </Field>

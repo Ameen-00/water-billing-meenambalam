@@ -84,7 +84,7 @@ export function isJanMay(date = new Date()) {
 }
 
 // -- THE CORE CALCULATION (split band by band) ----------------------------
-export function calculateCharge(consumer, currentReading, tariff, meterReset = false, billDate = new Date()) {
+export function calculateCharge(consumer, currentReading, tariff, meterReset = false, billDate = new Date(), resetStart = 0) {
   const t = { ...initialTariff, ...(tariff || {}) };
   const meterFee = Number(t.meterFee ?? 5);
 
@@ -104,8 +104,11 @@ export function calculateCharge(consumer, currentReading, tariff, meterReset = f
   let curr = null;
   if (consumer.metered) {
     curr = Number(currentReading);
-    consumption = meterReset ? Math.max(0, curr) : Math.max(0, curr - consumer.prevReading);
-    if (meterReset) prev = 0;
+    // On a meter replacement, bill the usage on the NEW meter = current − its start
+    // reading (the reading at install/testing, often 0 but not always).
+    const rs = Math.max(0, Number(resetStart) || 0);
+    consumption = meterReset ? Math.max(0, curr - rs) : Math.max(0, curr - consumer.prevReading);
+    if (meterReset) prev = rs;
   }
 
   const parts = [];
