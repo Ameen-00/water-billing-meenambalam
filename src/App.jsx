@@ -225,6 +225,18 @@ function AppInner() {
     }
   }
 
+  async function editConsumerDetails(consumer, details) {
+    try {
+      await db.updateConsumerDetails(consumer.id, details);
+      setConsumers((p) => p.map((c) => (c.id === consumer.id ? { ...c, ...details } : c)));
+      toast.success(`${consumer.consumerNo} details updated`);
+      return true;
+    } catch (e) {
+      toast.error("Could not update details: " + e.message);
+      return false;
+    }
+  }
+
   async function addConsumer(data) {
     try {
       const c = await db.insertConsumer(data);
@@ -256,7 +268,7 @@ function AppInner() {
 
           <main key={role} className="animate-fade-in mx-auto max-w-5xl px-4 pb-24 pt-5">
             {userRole === "admin" && role === "admin" ? (
-              <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} onReprint={reprintTxn} onCancelBill={cancelBill} />
+              <AdminArea consumers={consumers} txns={txns} tariff={tariff} setTariff={persistTariff} onPay={setPaying} onAddConsumer={addConsumer} onSetStatus={setConsumerStatus} onReprint={reprintTxn} onCancelBill={cancelBill} onEditDetails={editConsumerDetails} />
             ) : (
               <ReaderFlow consumers={consumers} txns={txns} tariff={tariff} onGenerate={generateBill} onPay={setPaying} onReprint={reprintTxn} onCancelBill={cancelBill} onCancelPayment={cancelPayment} />
             )}

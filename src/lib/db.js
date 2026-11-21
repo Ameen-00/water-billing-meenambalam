@@ -67,6 +67,16 @@ export async function updateConsumerStatus(consumerId, status) {
   if (error) throw error;
 }
 
+// Admin edit of contact details only — never readings, dues or payments.
+// Writes just the fields passed (the ones actually changed).
+export async function updateConsumerDetails(consumerId, details) {
+  const patch = {};
+  for (const k of ["name", "phone", "address"]) if (k in details) patch[k] = details[k];
+  if (!Object.keys(patch).length) return;
+  const { error } = await supabase.from("consumers").update(patch).eq("id", consumerId);
+  if (error) throw error;
+}
+
 export async function updateFineDue(consumerId, fineDue) {
   const { error } = await supabase.from("consumers").update({ fine_due: fineDue }).eq("id", consumerId);
   if (error) throw error;

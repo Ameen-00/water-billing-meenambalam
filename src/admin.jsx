@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { scheme, money, balanceOf, categoryLabel, matchesConsumer, duesBreakdown, splitPaidAmount, consumerCharges } from "./billing";
-import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui";
+import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill, Modal } from "./ui";
 
 // ===========================================================================
 // AdminArea — tab shell for Dashboard / Reports / Settings, plus consumer detail
 // ===========================================================================
-export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus, onCancelBill, onReprint }) {
+export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus, onCancelBill, onReprint, onEditDetails }) {
   const [tab, setTab] = useState("dashboard");
   const [detailId, setDetailId] = useState(null);
 
   if (detailId) {
     const consumer = consumers.find((c) => c.id === detailId);
     return (
-      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} onCancelBill={onCancelBill} onReprint={onReprint} />
+      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} onCancelBill={onCancelBill} onReprint={onReprint} onEditDetails={onEditDetails} />
     );
   }
 
@@ -217,8 +217,9 @@ function Stat({ label, value, tone, sub, onClick, active }) {
 // ===========================================================================
 // CONSUMER DETAIL — full ledger / history
 // ===========================================================================
-function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, onCancelBill, onReprint }) {
+function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, onCancelBill, onReprint, onEditDetails }) {
   const isDisc = consumer.status === "disconnected";
+  const [editing, setEditing] = useState(false);
   const lastBillId = [...txns].reverse().find((t) => t.type === "bill" && t.consumerId === consumer.id)?.id;
   const rows = useMemo(() => {
     const list = txns.filter((t) => t.consumerId === consumer.id);
@@ -244,6 +245,15 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, on
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold">{consumer.name}</h2>
               {isDisc ? <Pill variant="flat">Disconnected</Pill> : <Pill variant="credit">Active</Pill>}
+              {onEditDetails && (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="rounded-lg border border-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  ✏️ Edit details
+                </button>
+              )}
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
               <Info label="Consumer No" value={consumer.consumerNo} strong />
@@ -264,6 +274,8 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, on
           <Button variant="gold" disabled={balance <= 0} onClick={() => onPay(consumer)}>Record Payment</Button>
         </div>
       </Card>
+
+      {editing && <EditDetailsModal consumer={consumer} onClose={() => setEditing(false)} onSave={onEditDetails} />}
 
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">Account history</div>
@@ -297,6 +309,43 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, on
         )}
       </Card>
     </div>
+  );
+}
+
+// Admin: edit name / phone / address only. Readings, dues and payments are not
+// editable here, and every change is shown old → new before it is saved.
+function EditDetailsModal({ consumer, onClose, onSave }) {
+  const [name, setName] = useState(consumer.name || "");
+  const [phone, setPhone] = useState(consumer.phone || "");
+  const [address, setAddress] = useState(consumer.address || "");
+  const [saving, setSaving] = useState(false);
+  const next = { name: name.trim(), phone: phone.trim() || null, address: address.trim() || null };
+  const fields = [["Name", "name"], ["Phone", "phone"], ["Address", "address"]];
+  const changes = fields.filter(([, k]) => (next[k] || "") !== (consumer[k] || ""));
+  const canSave = !saving && next.name !== "" && changes.length > 0;
+
+  async function save() {
+    const lines = changes.map(([label, k]) => `${label}: ${consumer[k] || "—"}  →  ${next[k] || "—"}`).join("\n");
+    if (!confirm(`Save these changes for ${consumer.consumerNo}?\n\n${lines}\n\nMeter readings, dues and payments will NOT change.`)) return;
+    setSaving(true);
+    const ok = await onSave(consumer, Object.fromEntries(changes.map(([, k]) => [k, next[k]])));
+    setSaving(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Modal title="Edit details" subtitle={`${consumer.consumerNo} · readings, dues and payments are not changed`} onClose={onClose}>
+      <div className="space-y-3">
+        <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} /></Field>
+        <Field label="Phone"><input value={phone} inputMode="tel" onChange={(e) => setPhone(e.target.value)} className={inputClass} /></Field>
+        <Field label="Address"><input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} /></Field>
+        {name.trim() === "" && <p className="text-xs text-rose-600">Name cannot be empty.</p>}
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Button variant="ghost" className="flex-1" onClick={onClose}>Cancel</Button>
+        <Button className="flex-1" disabled={!canSave} onClick={save}>{saving ? "Saving…" : "Save changes"}</Button>
+      </div>
+    </Modal>
   );
 }
 
