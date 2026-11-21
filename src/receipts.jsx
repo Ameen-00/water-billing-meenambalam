@@ -50,6 +50,8 @@ export function BillReceipt({ data }) {
   const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName, currReadingDate, prevReadingDate, arrearsInfo } = data;
   const arrLabel = { water: "Water", meter: "Meter", other: "Other", fine: "Fine" };
   const qr = upiUri({ amount: totalDue, note: `${consumer.consumerNo} ${billNo}` });
+  // Paid ahead: show "Advance credit" / "Credit left" instead of minus amounts.
+  const payable = Math.max(0, totalDue);
   return (
     <Paper>
       <Head title="WATER BILL / NOTICE" />
@@ -97,7 +99,7 @@ export function BillReceipt({ data }) {
       {charge.season && <L l="Season" r={charge.season} />}
       <Dashed />
       <L l="This bill" r={money(charge.currentCharge)} bold />
-      <L l="Arrears" r={money(arrears)} />
+      {arrears < 0 ? <L l="Advance credit" r={money(-arrears)} /> : <L l="Arrears" r={money(arrears)} />}
       {arrearsInfo && arrearsInfo.rows.map((r) => (
         <div key={r.key} className="flex justify-between pl-2 text-[10px]">
           <span>· {arrLabel[r.key]}{r.key === "other" && arrearsInfo.reason ? ` (${arrearsInfo.reason})` : ""}</span>
@@ -105,14 +107,15 @@ export function BillReceipt({ data }) {
         </div>
       ))}
       <Dashed />
-      <L l="TOTAL PAYABLE" r={money(totalDue)} bold />
-      <div className="mt-1 text-[10px] italic">({amountInWords(totalDue)})</div>
+      <L l="TOTAL PAYABLE" r={money(payable)} bold />
+      <div className="mt-1 text-[10px] italic">({amountInWords(payable)})</div>
+      {totalDue < 0 && <L l="Credit left" r={money(-totalDue)} />}
       <Dashed />
       <div className="text-[10px]">
         <div>Pay by {dueNoFine} — no fine</div>
         <div>Pay by {dueWithFine} — with fine</div>
       </div>
-      {scheme.showUpi && (
+      {scheme.showUpi && payable > 0 && (
         <>
           <Dashed />
           <div className="flex flex-col items-center gap-0.5 py-0.5">

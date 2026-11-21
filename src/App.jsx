@@ -975,7 +975,9 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
         {charge.other > 0 && <Line l={charge.otherReason ? `${tr("otherCharges")} — ${charge.otherReason}` : tr("otherCharges")} v={money(charge.other)} />}
         <div className="my-2 border-t border-dashed border-slate-200" />
         <Line l={tr("thisBill")} v={money(charge.currentCharge)} />
-        <Line l={tr("prevArrears")} v={money(arrears)} />
+        {arrears < 0
+          ? <Line l={tr("advanceCredit")} v={money(-arrears)} />
+          : <Line l={tr("prevArrears")} v={money(arrears)} />}
         {arrInfo && (
           <div className="mb-1 rounded-lg bg-slate-50 px-3 py-1.5">
             {arrInfo.rows.map((r) => (
@@ -987,7 +989,8 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
           </div>
         )}
         <div className="my-2 border-t border-dashed border-slate-200" />
-        <Line l={tr("totalPayable")} v={money(totalDue)} bold />
+        <Line l={tr("totalPayable")} v={money(Math.max(0, totalDue))} bold />
+        {totalDue < 0 && <Line l={tr("creditLeft")} v={money(-totalDue)} />}
       </Card>
 
       {billedThisMonth && (

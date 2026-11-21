@@ -776,6 +776,8 @@ function Audit({ consumers, txns }) {
 
   const num = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
   const rs = (v) => (v == null ? "—" : money(v));
+  // A minus balance means they paid ahead — show it as "Cr ₹X", not "-₹X".
+  const dueOrCredit = (v) => (v == null ? "—" : v < 0 ? <span className="font-medium text-sky-700">Cr {money(-v)}</span> : money(v));
   const summary = [
     ["Consumers", rows.length],
     ["Water used", num(totals.used) + " L"],
@@ -922,11 +924,11 @@ function Audit({ consumers, txns }) {
         <table className="w-full min-w-[1440px] text-left text-[11px]">
           <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
             <tr>
-              <th className="p-1.5">No</th><th className="p-1.5">Name</th><th className="p-1.5">Meter No</th><th className="p-1.5">Date</th>
+              <th className="p-1.5">No</th><th className="p-1.5">Name</th><th className="p-1.5">Meter No</th><th className="p-1.5">Date</th><th className="p-1.5">Bill No</th>
               {showReading && (<><th className="p-1.5 text-right">Prev</th><th className="p-1.5 text-right">Curr</th><th className="p-1.5 text-right">Used L</th></>)}
               <th className="p-1.5 text-right">Due Water</th><th className="p-1.5 text-right">Due Meter</th>
               <th className="p-1.5 text-right">Due Other</th><th className="p-1.5 text-right">Due Fine</th><th className="p-1.5 text-right">Bill ₹</th>
-              <th className="p-1.5">Bill No</th><th className="p-1.5 text-right">Arrears ₹</th><th className="p-1.5 text-right">Total ₹</th>
+              <th className="p-1.5 text-right">Arrears ₹</th><th className="p-1.5 text-right">Total ₹</th>
               <th className="p-1.5 text-right">Paid ₹</th>
               <th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Water</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Meter</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Other</th><th className="p-1.5 text-right bg-sky-50 text-sky-700">Pd Fine</th><th className="p-1.5 text-right bg-indigo-50 text-indigo-700">Advance</th>
               <th className="p-1.5">Mode</th><th className="p-1.5">Receipt</th>
@@ -940,15 +942,15 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5">{r.c.name}</td>
                 <td className="p-1.5 font-mono text-[10px]">{r.meterNo}</td>
                 <td className="p-1.5 whitespace-nowrap">{r.date}</td>
+                <td className="p-1.5 font-mono text-[10px]">{r.billNo}</td>
                 {showReading && (<><td className="p-1.5 text-right">{num(r.prev)}</td><td className="p-1.5 text-right">{num(r.curr)}</td><td className="p-1.5 text-right">{num(r.used)}</td></>)}
                 <td className="p-1.5 text-right">{rs(r.water)}</td>
                 <td className="p-1.5 text-right">{rs(r.meter)}</td>
                 <td className="p-1.5 text-right">{r.other ? money(r.other) : "—"}</td>
                 <td className="p-1.5 text-right">{r.fine ? money(r.fine) : "—"}</td>
                 <td className="p-1.5 text-right font-medium">{rs(r.thisBill)}</td>
-                <td className="p-1.5 font-mono text-[10px]">{r.billNo}</td>
-                <td className="p-1.5 text-right">{rs(r.arrears)}</td>
-                <td className="p-1.5 text-right">{rs(r.total)}</td>
+                <td className="p-1.5 text-right">{dueOrCredit(r.arrears)}</td>
+                <td className="p-1.5 text-right">{dueOrCredit(r.total)}</td>
                 <td className="p-1.5 text-right text-sky-700">{r.paid ? money(r.paid) : "—"}</td>
                 <td className="p-1.5 text-right bg-sky-50">{r.paidWater ? money(r.paidWater) : "—"}</td>
                 <td className="p-1.5 text-right bg-sky-50">{r.paidMeter ? money(r.paidMeter) : "—"}</td>
@@ -957,7 +959,7 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right bg-indigo-50 font-medium text-indigo-700">{r.paidAdvance ? money(r.paidAdvance) : "—"}</td>
                 <td className="p-1.5">{r.mode || "—"}</td>
                 <td className="p-1.5 font-mono text-[10px]">{r.receiptNo || "—"}</td>
-                <td className="p-1.5 text-right font-medium">{money(r.balanceNow)}</td>
+                <td className="p-1.5 text-right font-medium">{dueOrCredit(r.balanceNow)}</td>
                 <td className="p-1.5 text-[10px]">{r.status}</td>
               </tr>
             ))}
@@ -968,7 +970,7 @@ function Audit({ consumers, txns }) {
           {rows.length > 0 && (
             <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
               <tr>
-                <td className="p-1.5" colSpan={showReading ? 6 : 4}>TOTAL ({rows.length})</td>
+                <td className="p-1.5" colSpan={showReading ? 7 : 5}>TOTAL ({rows.length})</td>
                 {showReading && <td className="p-1.5 text-right">{num(totals.used)}</td>}
                 <td className="p-1.5 text-right">{money(totals.water)}</td>
                 <td className="p-1.5 text-right">{money(totals.meter)}</td>
@@ -976,8 +978,7 @@ function Audit({ consumers, txns }) {
                 <td className="p-1.5 text-right">{money(totals.fine)}</td>
                 <td className="p-1.5 text-right">{money(totals.thisBill)}</td>
                 <td className="p-1.5"></td>
-                <td className="p-1.5"></td>
-                <td className="p-1.5 text-right">{money(totals.total)}</td>
+                <td className="p-1.5 text-right">{dueOrCredit(totals.total)}</td>
                 <td className="p-1.5 text-right text-sky-700">{money(totals.paid)}</td>
                 <td className="p-1.5 text-right bg-sky-50">{money(totals.paidWater)}</td>
                 <td className="p-1.5 text-right bg-sky-50">{money(totals.paidMeter)}</td>
