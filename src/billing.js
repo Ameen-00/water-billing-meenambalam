@@ -17,12 +17,12 @@ export const scheme = {
   malayalamName: "കോലയിൽ കുടിവെള്ള ശുചിത്വ സമിതി",
   subtitle: "Meenambalam, Kalluvathukkal · Reg. No. Q 1060/02",
   phone: "+91 81389 71257",
-  // Cash-only for launch. Next month: set showUpi = true AND put the REAL UPI
-  // id below, then the "Scan to pay" QR comes back on every bill/receipt.
-  showUpi: false,
+  // "Scan to pay" UPI QR on every bill/receipt. VPA + name are copied from the
+  // society's Indian Bank QR standee (decoded, not typed by guess).
+  showUpi: true,
   upi: {
-    vpa: "kollamwater@sbi",
-    payeeName: "Kolayil Water Samithi",
+    vpa: "suchitwasamithi@indianbk",
+    payeeName: "MEENAMBALAM KOLAYIL KUDIVELLA SUCHITHWA SAMITHI",
     account: "SBI · A/c 3021 5566 7788 · IFSC SBIN0001234",
   },
 };
@@ -397,12 +397,15 @@ export function matchesConsumer(c, query, extra = "") {
   return [c.name, c.consumerNo, c.meterNo, c.address, c.phone, extra].join(" ").toLowerCase().includes(s);
 }
 
+// Same shape as the bank's own QR: plain "@" in the VPA and %20 for spaces
+// (URLSearchParams gives %40 and "+", which some UPI apps show or reject).
 export function upiUri({ amount, note } = {}) {
   const { vpa, payeeName } = scheme.upi;
-  const p = new URLSearchParams({ pa: vpa, pn: payeeName, cu: "INR" });
-  if (amount && amount > 0) p.set("am", Number(amount).toFixed(2));
-  if (note) p.set("tn", note);
-  return "upi://pay?" + p.toString();
+  const enc = (v) => encodeURIComponent(v).replace(/%40/g, "@");
+  const parts = [`pa=${enc(vpa)}`, `pn=${enc(payeeName)}`, "cu=INR"];
+  if (amount && amount > 0) parts.push(`am=${Number(amount).toFixed(2)}`);
+  if (note) parts.push(`tn=${enc(note)}`);
+  return "upi://pay?" + parts.join("&");
 }
 
 export function docNo(prefix, seq) {
