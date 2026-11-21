@@ -5,14 +5,14 @@ import { Avatar, Pill, Card, Button, Field, inputClass, BalancePill } from "./ui
 // ===========================================================================
 // AdminArea — tab shell for Dashboard / Reports / Settings, plus consumer detail
 // ===========================================================================
-export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus, onCancelBill }) {
+export function AdminArea({ consumers, txns, tariff, setTariff, onPay, onAddConsumer, onSetStatus, onCancelBill, onReprint }) {
   const [tab, setTab] = useState("dashboard");
   const [detailId, setDetailId] = useState(null);
 
   if (detailId) {
     const consumer = consumers.find((c) => c.id === detailId);
     return (
-      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} onCancelBill={onCancelBill} />
+      <ConsumerDetail consumer={consumer} tariff={tariff} txns={txns} onBack={() => setDetailId(null)} onPay={onPay} onSetStatus={onSetStatus} onCancelBill={onCancelBill} onReprint={onReprint} />
     );
   }
 
@@ -217,7 +217,7 @@ function Stat({ label, value, tone, sub, onClick, active }) {
 // ===========================================================================
 // CONSUMER DETAIL — full ledger / history
 // ===========================================================================
-function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, onCancelBill }) {
+function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, onCancelBill, onReprint }) {
   const isDisc = consumer.status === "disconnected";
   const lastBillId = [...txns].reverse().find((t) => t.type === "bill" && t.consumerId === consumer.id)?.id;
   const rows = useMemo(() => {
@@ -268,7 +268,7 @@ function ConsumerDetail({ consumer, tariff, txns, onBack, onPay, onSetStatus, on
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">Account history</div>
         <div className="divide-y divide-slate-100">
-          {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} consumer={consumer} txns={txns} lastBillId={lastBillId} onCancelBill={onCancelBill} />)}
+          {rows.map((r, i) => <LedgerRow key={i} row={r} consumerName={consumer.name} consumer={consumer} txns={txns} lastBillId={lastBillId} onCancelBill={onCancelBill} onReprint={onReprint} />)}
         </div>
       </Card>
 
@@ -335,7 +335,7 @@ export function ArrearsSplit({ info, className = "" }) {
   );
 }
 
-function LedgerRow({ row, consumerName, consumer, txns, lastBillId, onCancelBill }) {
+function LedgerRow({ row, consumerName, consumer, txns, lastBillId, onCancelBill, onReprint }) {
   if (row.kind === "opening") {
     const dues = duesBreakdown(consumer, txns);
     const info = dues.rows.length ? dues : null;
@@ -357,9 +357,16 @@ function LedgerRow({ row, consumerName, consumer, txns, lastBillId, onCancelBill
   }
   const t = row.t;
   const isBill = t.type === "bill";
+  // Tap any entry to open that bill/receipt (its saved copy) and print it.
+  const canOpen = !!(onReprint && t.meta?.snapshot);
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <div className="min-w-0">
+      <button
+        type="button"
+        disabled={!canOpen}
+        onClick={() => canOpen && onReprint(consumer, t)}
+        className={`min-w-0 flex-1 rounded-lg text-left ${canOpen ? "hover:bg-slate-50" : "cursor-default"}`}
+      >
         <div className="flex items-center gap-2 text-sm font-medium">
           <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${isBill ? "bg-rose-100 text-rose-600" : "bg-sky-100 text-sky-600"}`}>
             {isBill ? "↑" : "↓"}
@@ -374,7 +381,7 @@ function LedgerRow({ row, consumerName, consumer, txns, lastBillId, onCancelBill
           {!isBill && t.meta.payerName && t.meta.payerName !== consumerName ? ` · by ${t.meta.payerName}` : ""}
           {!isBill && t.meta.reference ? ` · ${t.meta.reference}` : ""}
         </div>
-      </div>
+      </button>
       <div className="flex items-center gap-2">
         <div className="text-right">
           <div className={`text-sm font-semibold ${isBill ? "text-rose-600" : "text-sky-600"}`}>
@@ -382,6 +389,15 @@ function LedgerRow({ row, consumerName, consumer, txns, lastBillId, onCancelBill
           </div>
           <div className="text-xs text-slate-400">bal {money(row.balance)}</div>
         </div>
+        {canOpen && (
+          <button
+            type="button"
+            onClick={() => onReprint(consumer, t)}
+            className="shrink-0 rounded-lg border border-blue-200 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+          >
+            🖨 View / Print
+          </button>
+        )}
         {isBill && onCancelBill && t.id === lastBillId && (
           <button
             type="button"

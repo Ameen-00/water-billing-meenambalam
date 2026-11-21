@@ -34,6 +34,16 @@ function Head({ title }) {
   );
 }
 
+// Stamp for reprints of an older bill/receipt (amounts are as of that date).
+function Duplicate({ what }) {
+  return (
+    <div className="mt-1 text-center">
+      <div className="inline-block border border-black px-1 text-[11px] font-bold tracking-wider">DUPLICATE COPY</div>
+      <div className="text-[9px] leading-tight">Old {what} — amounts as on that date. Check current due before paying.</div>
+    </div>
+  );
+}
+
 function Paper({ children }) {
   return (
     <div
@@ -47,7 +57,7 @@ function Paper({ children }) {
 }
 
 export function BillReceipt({ data }) {
-  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName, currReadingDate, prevReadingDate, arrearsInfo } = data;
+  const { consumer, charge, billNo, arrears, totalDue, date, dueNoFine, dueWithFine, readerName, currReadingDate, prevReadingDate, arrearsInfo, duplicate } = data;
   const arrLabel = { water: "Water", meter: "Meter", other: "Other", fine: "Fine" };
   const qr = upiUri({ amount: totalDue, note: `${consumer.consumerNo} ${billNo}` });
   // Paid ahead: show "Advance credit" / "Credit left" instead of minus amounts.
@@ -55,6 +65,7 @@ export function BillReceipt({ data }) {
   return (
     <Paper>
       <Head title="WATER BILL / NOTICE" />
+      {duplicate && <Duplicate what="bill" />}
       <Dashed />
       <L l="Bill No" r={billNo} />
       <L l="Date" r={date} />
@@ -115,7 +126,7 @@ export function BillReceipt({ data }) {
         <div>Pay by {dueNoFine} — no fine</div>
         <div>Pay by {dueWithFine} — with fine</div>
       </div>
-      {scheme.showUpi && payable > 0 && (
+      {scheme.showUpi && payable > 0 && !duplicate && (
         <>
           <Dashed />
           <div className="flex flex-col items-center gap-0.5 py-0.5">
@@ -133,12 +144,13 @@ export function BillReceipt({ data }) {
 }
 
 export function PaymentReceipt({ data }) {
-  const { consumer, amount, payerName, reference, mode, receiptNo, balanceAfter, date, alliedFor, spotBillNo, lastCharge } = data;
+  const { consumer, amount, payerName, reference, mode, receiptNo, balanceAfter, date, alliedFor, spotBillNo, lastCharge, duplicate } = data;
   const remaining = balanceAfter > 0 ? balanceAfter : 0;
   const credit = balanceAfter < 0 ? -balanceAfter : 0;
   return (
     <Paper>
       <Head title="RECEIPT" />
+      {duplicate && <Duplicate what="receipt" />}
       <Dashed />
       <L l="Receipt No" r={receiptNo} />
       <L l="Date" r={date} />
@@ -165,7 +177,7 @@ export function PaymentReceipt({ data }) {
       <div className="mt-1 text-[10px] italic">({amountInWords(amount)} received)</div>
       <Dashed />
       <div className="text-center text-[11px] font-bold tracking-wider">✓ PAID</div>
-      {scheme.showUpi && remaining > 0 && (
+      {scheme.showUpi && remaining > 0 && !duplicate && (
         <div className="mt-1 flex flex-col items-center gap-1">
           <QRCodeSVG value={upiUri({ amount: remaining, note: `${consumer.consumerNo} balance` })} size={92} level="M" />
           <div className="text-[10px]">Scan to pay balance</div>

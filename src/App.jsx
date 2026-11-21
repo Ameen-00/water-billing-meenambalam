@@ -169,8 +169,12 @@ function AppInner() {
   function reprintTxn(consumer, txn) {
     const m = txn.meta || {};
     if (!m.snapshot) { toast.error("This older entry has no saved copy to reprint."); return; }
-    if (txn.type === "bill") setReceipt({ kind: "bill", data: { consumer, charge: m.charge, ...m.snapshot } });
-    else setReceipt({ kind: "payment", data: { consumer, ...m.snapshot } });
+    // Anything older than this consumer's latest bill/receipt prints as a marked
+    // duplicate with no QR, so nobody pays an old bill's amount by mistake.
+    const latest = [...txns].reverse().find((t) => t.consumerId === consumer.id && t.type === txn.type);
+    const duplicate = !!latest && latest.id !== txn.id;
+    if (txn.type === "bill") setReceipt({ kind: "bill", data: { consumer, charge: m.charge, ...m.snapshot, duplicate } });
+    else setReceipt({ kind: "payment", data: { consumer, ...m.snapshot, duplicate } });
   }
 
   async function recordPayment(consumer, { amount, split, payerName, reference, mode, alliedFor }) {
@@ -693,7 +697,10 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
   const readingLow = !isDisc && consumer.metered && !reset && reading !== "" && Number(reading) < consumer.prevReading;
   const canSave = isDisc || !consumer.metered || reading !== "";
 
-  const recent = txns.filter((t) => t.consumerId === consumer.id).slice(-3).reverse();
+  // Last 3 by default; "Show all" lists every past bill/payment so any of them can be reprinted.
+  const allEntries = txns.filter((t) => t.consumerId === consumer.id).reverse();
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const recent = showAllHistory ? allEntries : allEntries.slice(0, 3);
   // Only the newest bill can be cancelled (so restoring the meter reading is safe).
   const lastBillId = [...txns].reverse().find((t) => t.type === "bill" && t.consumerId === consumer.id)?.id;
   const lastPaymentId = [...txns].reverse().find((t) => t.type === "payment" && t.consumerId === consumer.id)?.id;
@@ -863,6 +870,15 @@ function ReadingEntry({ consumer, tariff, txns, arrears, onBack, onGenerate, onP
               </div>
             );
           })}
+          {allEntries.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setShowAllHistory((v) => !v)}
+              className="mt-1 w-full rounded-lg py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+            >
+              {showAllHistory ? tr("showLess") : `${tr("showAll")} (${allEntries.length})`}
+            </button>
+          )}
         </Card>
       )}
 
